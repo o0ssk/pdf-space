@@ -1,39 +1,56 @@
-import React from "react";
-import { Loader2, AlertCircle, Check, Eye } from "lucide-react";
+import React, { useCallback } from "react";
+import { AlertCircle, Check, Eye } from "lucide-react";
+import { motion, useReducedMotion } from "motion/react";
 import { usePageThumbnail } from "../../hooks/usePageThumbnail";
-import { ThumbnailStatus } from "../../types/workspace";
+import {
+  PageSelectionModifiers,
+  PageRotation,
+  ThumbnailStatus,
+} from "../../types/workspace";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { motionSprings, reducedMotionTransition } from "../../lib/motion/motionSystem";
 
 type PageThumbnailProps = {
   pageId: string;
   documentId: string;
   sourceDocumentId: string;
   originalPageIndex: number;
+  rotation: PageRotation;
   pageNumber: number;
   thumbnailStatus: ThumbnailStatus;
-  thumbnailUrl?: string;
+  thumbnailUrl?: string | undefined;
   docColor: string;
   docName: string;
-  errorMessage?: string;
+  errorMessage?: string | undefined;
   onStatusChange: (
     pageId: string,
     status: ThumbnailStatus,
     url?: string,
-    errorMessage?: string
+    errorMessage?: string,
+    expectedRotation?: PageRotation
   ) => boolean;
   isSelected?: boolean;
-  onSelect?: (pageId: string, documentId: string) => void;
+  isActive?: boolean;
+  isViewerPage?: boolean;
+  onSelect?: (
+    pageId: string,
+    documentId: string,
+    modifiers?: PageSelectionModifiers
+  ) => void;
   onOpenViewer?: (pageId: string, documentId: string) => void;
-  onClearSelection?: () => void;
   activeDragPageId?: string | null;
+  registerPageElement?: (pageId: string, element: HTMLElement | null) => void;
+  isNavigationHighlighted?: boolean;
+  isActiveDocument?: boolean;
 };
 
-export const PageThumbnail: React.FC<PageThumbnailProps> = ({
+const PageThumbnailComponent: React.FC<PageThumbnailProps> = ({
   pageId,
   documentId,
   sourceDocumentId,
   originalPageIndex,
+  rotation,
   pageNumber,
   thumbnailStatus,
   thumbnailUrl,
@@ -42,170 +59,259 @@ export const PageThumbnail: React.FC<PageThumbnailProps> = ({
   errorMessage,
   onStatusChange,
   isSelected = false,
+  isActive = false,
+  isViewerPage = false,
   onSelect,
   onOpenViewer,
-  onClearSelection,
   activeDragPageId = null,
+  registerPageElement,
+  isNavigationHighlighted = false,
+  isActiveDocument = false,
 }) => {
+  const reduceMotion = useReducedMotion();
   const { containerRef } = usePageThumbnail({
     pageId,
     sourceDocumentId,
     originalPageIndex,
+    rotation,
     thumbnailStatus,
+    isActiveDocument,
     onStatusChange,
   });
-
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({
-    id: `page:${pageId}`,
-    disabled: thumbnailStatus === "error",
-    data: {
-      type: "page",
-      pageId,
-      currentContainerId: documentId,
-      sourceIndex: originalPageIndex,
-    },
-  });
-
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({
+      id: `page:${pageId}`,
+      disabled: thumbnailStatus === "error",
+      data: {
+        type: "page",
+        pageId,
+        containerId: documentId,
+        index: pageNumber - 1,
+      },
+    });
   const isCurrentDragging = isDragging || activeDragPageId === pageId;
+  const isLandscape = rotation === 90 || rotation === 270;
+  const combinedRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      containerRef.current = node;
+      setNodeRef(node);
+      registerPageElement?.(pageId, node);
+    },
+    [containerRef, pageId, registerPageElement, setNodeRef]
+  );
+  const { onKeyDown: onDndKeyDown, ...pointerListeners } = listeners ?? {};
+  const folio = String(pageNumber).padStart(2, "0");
 
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-  };
-
-  const handleClick = (e: React.MouseEvent) => {
-    e.preventDefault();
+  const handleClick = (event: React.MouseEvent<HTMLButtonElement>) => {
     if (isCurrentDragging) return;
-    onSelect?.(pageId, documentId);
+    const additive = event.ctrlKey || event.metaKey;
+    onSelect?.(pageId, documentId, {
+      toggle: additive && !event.shiftKey,
+      range: event.shiftKey,
+      preserveExisting: additive && event.shiftKey,
+    });
   };
 
-  const handleDoubleClick = (e: React.MouseEvent) => {
-    e.preventDefault();
+  const handleDoubleClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+    event.preventDefault();
     if (isCurrentDragging) return;
     onOpenViewer?.(pageId, documentId);
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
     if (isCurrentDragging) return;
-    if (e.key === "Enter") {
-      e.preventDefault();
+    if (event.key === "Enter") {
+      event.preventDefault();
       onOpenViewer?.(pageId, documentId);
-    } else if (e.key === " ") {
-      e.preventDefault();
-      onSelect?.(pageId, documentId);
-    } else if (e.key === "Escape") {
-      e.preventDefault();
-      onClearSelection?.();
+      return;
     }
+
+    onDndKeyDown?.(event);
   };
 
-  const handleOpenClick = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation(); // Prevent re-triggering select
+  const handleSelectionControlClick = (
+    event: React.MouseEvent<HTMLButtonElement>
+  ) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (isCurrentDragging) return;
+    onSelect?.(pageId, documentId, { toggle: true });
+  };
+
+  const handleSelectionControlKeyDown = (
+    event: React.KeyboardEvent<HTMLButtonElement>
+  ) => {
+    if (event.key !== " ") return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (isCurrentDragging) return;
+    onSelect?.(pageId, documentId, { toggle: true });
+  };
+
+  const handleOpenControlClick = (
+    event: React.MouseEvent<HTMLButtonElement>
+  ) => {
+    event.preventDefault();
+    event.stopPropagation();
     if (isCurrentDragging) return;
     onOpenViewer?.(pageId, documentId);
-  };
-
-  const combinedRef = (node: HTMLDivElement | null) => {
-    containerRef.current = node;
-    setNodeRef(node);
   };
 
   return (
     <div
       ref={combinedRef}
-      style={style}
-      className={`relative flex flex-col items-center p-1 transition-opacity duration-200 ${
-        isCurrentDragging ? "opacity-35 select-none pointer-events-none" : "group"
-      }`}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        willChange: transform || isCurrentDragging ? "transform" : undefined,
+      }}
+      className={`precision-page-cell group relative flex justify-center ${
+        isNavigationHighlighted ? "is-navigation-highlighted" : ""
+      } ${isCurrentDragging ? "is-drag-source" : ""}`}
       id={`page-container-${pageId}`}
-      {...attributes}
-      {...listeners}
+      data-page-id={pageId}
+      data-container-id={documentId}
+      data-page-selected={isSelected ? "true" : "false"}
+      data-page-active={isActive ? "true" : "false"}
+      data-page-orientation={isLandscape ? "landscape" : "portrait"}
     >
-      <div className="relative">
-        {/* Main Selection Wrapper to make the card fully interactive, accessible, and draggable */}
-        <div
-          role="button"
-          tabIndex={isCurrentDragging ? -1 : 0}
-          onClick={handleClick}
-          onDoubleClick={handleDoubleClick}
-          onKeyDown={handleKeyDown}
-          aria-label={`Select page ${pageNumber} of ${docName}`}
-          className={`w-[140px] sm:w-[150px] aspect-[1/1.41] rounded-xl bg-panel-elevated/40 border text-left overflow-hidden flex flex-col items-center justify-center relative transition-all duration-300 group-hover:shadow-[0_8px_24px_rgba(0,0,0,0.5)] shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-bright cursor-pointer select-none ${
-            isSelected && !isCurrentDragging
-              ? "border-blue-bright shadow-[0_0_20px_rgba(0,245,255,0.15)]"
-              : "border-white/5 group-hover:border-white/15"
-          }`}
-          style={{
-            borderLeftWidth: "4px",
-            borderLeftColor: docColor,
-          }}
-        >
-          {/* State Indicators */}
-          {thumbnailStatus === "idle" && (
-            <div className="absolute inset-0 bg-panel-elevated/20 animate-pulse flex items-center justify-center text-muted-text/30" aria-hidden="true">
-              <span className="text-[9px] font-bold uppercase tracking-wider">Queueing</span>
-            </div>
-          )}
-
-          {thumbnailStatus === "rendering" && (
-            <div className="absolute inset-0 bg-panel-elevated/30 flex flex-col items-center justify-center gap-1.5 text-muted-text/50" aria-hidden="true">
-              <Loader2 className="w-4.5 h-4.5 animate-spin text-blue-bright" />
-              <span className="text-[8.5px] font-bold uppercase tracking-wider">Rendering</span>
-            </div>
-          )}
-
-          {thumbnailStatus === "error" && (
-            <div className="absolute inset-0 bg-red-500/5 flex flex-col items-center justify-center p-2.5 text-center gap-1.5 text-red-400" title={errorMessage}>
-              <AlertCircle className="w-4 h-4" aria-hidden="true" />
-              <span className="text-[8.5px] font-bold uppercase tracking-wider">Failed</span>
-            </div>
-          )}
-
-          {thumbnailStatus === "ready" && thumbnailUrl && (
-            <img
-              src={thumbnailUrl}
-              alt={`Page ${pageNumber} of ${docName}`}
-              referrerPolicy="no-referrer"
-              draggable={false}
-              className="w-full h-full object-contain select-none"
-            />
-          )}
-
-          {/* Selected Indicator Corner Badge */}
-          {isSelected && !isCurrentDragging && (
-            <div className="absolute top-2 right-2 w-5.5 h-5.5 rounded-full bg-blue-bright text-[#07080a] flex items-center justify-center shadow-lg transition-transform duration-200">
-              <Check className="w-3.5 h-3.5 stroke-[3.5]" />
-            </div>
-          )}
+      <motion.div
+        className={`precision-page-object ${
+          isSelected ? "is-selected" : ""
+        } ${isActive && isSelected ? "is-active-selected" : ""} ${
+          isViewerPage ? "is-viewer-page" : ""
+        }`}
+        initial={false}
+        animate={{
+          y: reduceMotion || isCurrentDragging ? 0 : isActive && isSelected ? -4 : isSelected ? -2 : 0,
+          scale: reduceMotion || isCurrentDragging ? 1 : isActive && isSelected ? 1.012 : isSelected ? 1.006 : 1,
+        }}
+        whileHover={
+          reduceMotion || isCurrentDragging
+            ? {}
+            : { y: isSelected ? -3 : -2, scale: isSelected ? 1.008 : 1.005 }
+        }
+        transition={reduceMotion ? reducedMotionTransition : motionSprings.control}
+      >
+        <div className="precision-selection-frame" aria-hidden="true">
+          <span className="precision-selection-corner corner-nw" />
+          <span className="precision-selection-corner corner-ne" />
+          <span className="precision-selection-corner corner-se" />
+          <span className="precision-selection-corner corner-sw" />
         </div>
 
-        {/* Floating Quick Action Button - Visible only on Selection, perfectly positioned and avoids nested buttons */}
-        {isSelected && !isCurrentDragging && (
-          <button
-            type="button"
-            onClick={handleOpenClick}
-            aria-label={`Open page ${pageNumber} of ${docName}`}
-            title={`Open page ${pageNumber} of ${docName}`}
-            className="absolute bottom-2.5 right-2.5 p-1.5 rounded-lg bg-panel-elevated/90 hover:bg-panel-elevated border border-white/10 hover:border-blue-bright text-muted-text hover:text-blue-bright shadow-lg transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-bright cursor-pointer"
+        <button
+          type="button"
+          data-page-primary-action
+          {...attributes}
+          {...pointerListeners}
+          onKeyDown={handleKeyDown}
+          onClick={handleClick}
+          onDoubleClick={handleDoubleClick}
+          aria-label={`Page ${pageNumber} of ${docName}. ${
+            isSelected ? "Selected" : "Not selected"
+          }. Press Space to drag or Enter to open.`}
+          aria-pressed={isSelected}
+          aria-current={isViewerPage ? "page" : undefined}
+          aria-busy={
+            thumbnailStatus === "idle" || thumbnailStatus === "rendering"
+              ? true
+              : undefined
+          }
+          className="precision-page-primary cursor-grab select-none text-left active:cursor-grabbing focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-bright focus-visible:ring-offset-2 focus-visible:ring-offset-main-bg"
+        >
+          <span
+            className={`precision-page-media ${
+              isLandscape ? "aspect-[1.41/1]" : "aspect-[1/1.41]"
+            }`}
           >
-            <Eye className="w-3.5 h-3.5" />
-          </button>
-        )}
-      </div>
+            {(thumbnailStatus === "idle" ||
+              thumbnailStatus === "rendering") && (
+              <span className="paper-skeleton" aria-hidden="true">
+                <span className="paper-skeleton-rule paper-skeleton-rule-strong" />
+                <span className="paper-skeleton-rule" />
+                <span className="paper-skeleton-rule" />
+                <span className="paper-skeleton-rule paper-skeleton-rule-short" />
+              </span>
+            )}
 
-      {/* Footer page number indicator */}
-      <div className="mt-2.5 flex items-center gap-1 text-[11px] font-bold text-secondary-text select-none">
-        <span className="text-muted-text text-[10px] uppercase font-mono tracking-wide">P.</span>
-        <span className={isSelected && !isCurrentDragging ? "text-blue-bright font-extrabold" : ""}>{pageNumber}</span>
-      </div>
+            {thumbnailStatus === "error" && (
+              <span
+                className="flex h-full w-full flex-col items-center justify-center gap-2 bg-red-500/[0.035] p-3 text-center text-red-500"
+                title={errorMessage}
+              >
+                <AlertCircle className="h-4 w-4" aria-hidden="true" />
+                <span className="text-[10px] font-semibold">
+                  Preview unavailable
+                </span>
+              </span>
+            )}
+
+            {thumbnailStatus === "ready" && thumbnailUrl && (
+              <img
+                src={thumbnailUrl}
+                alt={`Page ${pageNumber} of ${docName}`}
+                referrerPolicy="no-referrer"
+                draggable={false}
+                loading="lazy"
+                className="h-full w-full select-none object-contain"
+              />
+            )}
+
+            <span className="precision-drag-source-silhouette" aria-hidden="true">
+              <span />
+              <span />
+              <span />
+            </span>
+          </span>
+
+          <span className="precision-page-identity">
+            <span
+              className="precision-page-owner"
+              style={{ backgroundColor: docColor }}
+              aria-hidden="true"
+            />
+            <span className="studio-number precision-page-folio">{folio}</span>
+            <span className="precision-page-origin" aria-hidden="true">
+              {isLandscape ? "L" : "P"}
+            </span>
+            <span className="sr-only">
+              Page {pageNumber}, original page {originalPageIndex + 1}
+            </span>
+          </span>
+        </button>
+
+        <button
+          type="button"
+          aria-label={`Open page ${pageNumber} of ${docName}`}
+          title={`Open page ${pageNumber}`}
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={handleOpenControlClick}
+          className="page-context-hit page-open-hit focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-bright"
+        >
+          <span className="page-context-control">
+            <Eye className="h-3.5 w-3.5" aria-hidden="true" />
+          </span>
+        </button>
+
+        <button
+          type="button"
+          role="checkbox"
+          aria-checked={isSelected}
+          aria-label={`${isSelected ? "Deselect" : "Select"} page ${pageNumber} of ${docName}`}
+          title={`${isSelected ? "Deselect" : "Select"} page ${pageNumber}`}
+          onPointerDown={(event) => event.stopPropagation()}
+          onKeyDown={handleSelectionControlKeyDown}
+          onClick={handleSelectionControlClick}
+          className="page-context-hit page-selection-hit focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-bright"
+        >
+          <span className="page-selection-control">
+            <Check className="h-3.5 w-3.5" aria-hidden="true" />
+          </span>
+        </button>
+      </motion.div>
     </div>
   );
 };
+
+export const PageThumbnail = React.memo(PageThumbnailComponent);

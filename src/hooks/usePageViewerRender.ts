@@ -1,5 +1,9 @@
 import { useEffect, useRef, useState, useCallback } from "react";
-import { pdfDocumentRegistry } from "../lib/pdf/pdfDocumentRegistry";
+import { acquireWorkspacePdfDocument } from "../lib/pdf/workspacePdfDocumentLoader";
+import { thumbnailQueue } from "../lib/pdf/thumbnailQueue";
+import { pdfWorkBudget } from "../lib/pdf/pdfWorkBudget";
+import { normalizeRotation } from "../lib/workspace/pageOperations";
+import type { RenderTask } from "../lib/pdf/pdfjs";
 
 type UsePageViewerRenderProps = {
   documentId: string | null;
@@ -23,11 +27,21 @@ export function usePageViewerRender({
   const [retryTrigger, setRetryTrigger] = useState(0);
 
   // References to handle cancellation of active PDF.js jobs
-  const renderTaskRef = useRef<any>(null);
+  const renderTaskRef = useRef<RenderTask | null>(null);
 
   const retry = useCallback(() => {
     setRetryTrigger((prev) => prev + 1);
   }, []);
+
+  useEffect(() => {
+    if (!documentId) return;
+    thumbnailQueue.setForegroundActive(true);
+    const releaseForeground = pdfWorkBudget.acquireForeground();
+    return () => {
+      releaseForeground();
+      thumbnailQueue.setForegroundActive(false);
+    };
+  }, [documentId]);
 
   useEffect(() => {
     if (!documentId) {
@@ -43,7 +57,7 @@ export function usePageViewerRender({
       if (renderTaskRef.current) {
         try {
           renderTaskRef.current.cancel();
-        } catch (e) {
+        } catch {
           // Ignore cancellation errors
         }
         renderTaskRef.current = null;
@@ -59,18 +73,22 @@ export function usePageViewerRender({
         return;
       }
 
+      let lease;
       try {
-        const pdfDoc = pdfDocumentRegistry.get(documentId!);
-        if (!pdfDoc) {
-          throw new Error("Unable to retrieve PDF proxy from sandbox registry.");
-        }
+        lease = await acquireWorkspacePdfDocument(documentId!);
 
-        const page = await pdfDoc.getPage(pageNumber);
+        const page = await lease.document.getPage(pageNumber);
         if (isAborted) return;
 
-        // Obtain page dimensions under 1.0 scale
-        // Account for any inherent page rotation (page.rotation) + custom rotation (though currently 0)
-        const unscaledViewport = page.getViewport({ scale: 1, rotation: rotation });
+        // Workspace rotation is a user-applied delta on top of the source page's
+        // intrinsic PDF rotation.
+        const displayRotation = normalizeRotation(
+          (page.rotate ?? 0) + rotation
+        );
+        const unscaledViewport = page.getViewport({
+          scale: 1,
+          rotation: displayRotation,
+        });
 
         // Compute container size
         const containerWidth = container.clientWidth || 800;
@@ -97,7 +115,10 @@ export function usePageViewerRender({
 
         // Cap devicePixelRatio to 2 to protect device memory and performance
         const dpr = Math.min(window.devicePixelRatio || 1, 2);
-        const viewport = page.getViewport({ scale: finalScale * dpr, rotation: rotation });
+        const viewport = page.getViewport({
+          scale: finalScale * dpr,
+          rotation: displayRotation,
+        });
 
         // Set high-res canvas dimensions
         canvas.width = viewport.width;
@@ -117,6 +138,7 @@ export function usePageViewerRender({
 
         // Render PDF page inside canvas
         const renderContext = {
+          canvas,
           canvasContext: ctx,
           viewport: viewport,
         };
@@ -130,27 +152,31 @@ export function usePageViewerRender({
           setRendering(false);
           setError(null);
         }
-      } catch (err: any) {
-        if (err && err.name === "RenderingCancelledException") {
+      } catch (err: unknown) {
+        if (err instanceof Error && err.name === "RenderingCancelledException") {
           // Expected when canceling active draw jobs during navigation
           return;
         }
         console.error("High-resolution rendering failed:", err);
         if (!isAborted) {
-          setError(err?.message || "Failed to render high-resolution PDF page.");
+          setError(err instanceof Error ? err.message : "Failed to render high-resolution PDF page.");
           setRendering(false);
         }
+      } finally {
+        lease?.release();
       }
     }
 
-    renderPage();
+    void renderPage();
 
     return () => {
       isAborted = true;
       if (renderTaskRef.current) {
         try {
           renderTaskRef.current.cancel();
-        } catch (e) {}
+        } catch {
+          // PDF.js cancellation is best effort during unmount.
+        }
         renderTaskRef.current = null;
       }
     };
@@ -187,8 +213,8 @@ export function usePageViewerRender({
 
   // Instantly cleanup canvas memory on unmount
   useEffect(() => {
+    const canvas = canvasRef.current;
     return () => {
-      const canvas = canvasRef.current;
       if (canvas) {
         canvas.width = 0;
         canvas.height = 0;

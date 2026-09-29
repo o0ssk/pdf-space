@@ -1,27 +1,130 @@
-import React from "react";
-import { FileText, Trash2, Loader2, AlertTriangle, ShieldAlert, Move } from "lucide-react";
-import { WorkspaceDocument, ThumbnailStatus, ProjectedPageDrop } from "../../types/workspace";
+import React, { useCallback, useMemo } from "react";
+import { Loader2, AlertTriangle, ShieldAlert, Download } from "lucide-react";
+import { motion, useReducedMotion } from "motion/react";
+import {
+  WorkspaceDocument,
+  WorkspacePage,
+  PageRotation,
+  ThumbnailStatus,
+  ProjectedPageDrop,
+  PageSelectionModifiers,
+} from "../../types/workspace";
 import { PageThumbnail } from "./PageThumbnail";
 import { ProjectedPageGhost } from "./ProjectedPageGhost";
 import { useDroppable } from "@dnd-kit/core";
 import { SortableContext, rectSortingStrategy } from "@dnd-kit/sortable";
+import {
+  buildCrossContainerProjectedItems,
+  buildSameContainerProjectedItems,
+} from "../../lib/workspace/dndProjection";
+import { WorkspaceDocumentNameValidation } from "../../lib/workspace/documentOperations";
+import { DocumentNameEditor } from "./DocumentNameEditor";
+import { DocumentActionsMenu } from "./DocumentActionsMenu";
+import {
+  motionDurations,
+  motionEasings,
+  reducedMotionTransition,
+} from "../../lib/motion/motionSystem";
 
 type DocumentGroupProps = {
   document: WorkspaceDocument;
-  onRemove: (id: string) => void;
+  onDeleteDocument: (id: string) => void;
+  onDuplicateDocument: (id: string) => void;
+  canDeleteDocument: boolean;
+  documentActionsDisabled: boolean;
   onUpdatePageThumbnail: (
     pageId: string,
     status: ThumbnailStatus,
     url?: string,
-    errorMessage?: string
+    errorMessage?: string,
+    expectedRotation?: PageRotation
   ) => boolean;
-  selectedPageId: string | null;
-  onSelectPage: (pageId: string, documentId: string) => void;
+  selectedPageIds: readonly string[];
+  activeSelectedPageId: string | null;
+  viewerPageId: string | null;
+  onSelectPage: (
+    pageId: string,
+    documentId: string,
+    modifiers?: PageSelectionModifiers
+  ) => void;
   onOpenPageViewer: (pageId: string, documentId: string) => void;
-  onClearPageSelection: () => void;
+  onExportDocument: (documentId: string) => void;
   activeDragPageId: string | null;
   projectedTarget: ProjectedPageDrop | null;
-  allDocuments?: WorkspaceDocument[];
+  activePage: WorkspacePage | null;
+  onRenameDocument: (
+    id: string,
+    name: string
+  ) => WorkspaceDocumentNameValidation;
+  isRenaming: boolean;
+  onStartRename: (id: string) => void;
+  onStopRename: () => void;
+  registerDocumentElement: (
+    documentId: string,
+    element: HTMLElement | null
+  ) => void;
+  registerPageElement: (pageId: string, element: HTMLElement | null) => void;
+  highlightedDocumentId: string | null;
+  highlightedPageId: string | null;
+  isActiveDocument: boolean;
+};
+
+type DocumentDropFrameProps = {
+  documentId: string;
+  documentName: string;
+  activeDragPageId: string | null;
+  isTargetDocument: boolean;
+  renderedItemCount: number;
+  registerDocumentElement: (
+    documentId: string,
+    element: HTMLElement | null
+  ) => void;
+  isNavigationHighlighted: boolean;
+  children: React.ReactNode;
+};
+
+const DocumentDropFrame: React.FC<DocumentDropFrameProps> = ({
+  documentId,
+  documentName,
+  activeDragPageId,
+  isTargetDocument,
+  renderedItemCount,
+  registerDocumentElement,
+  isNavigationHighlighted,
+  children,
+}) => {
+  const { setNodeRef, isOver } = useDroppable({
+    id: `document:${documentId}`,
+    data: { type: "container", containerId: documentId },
+  });
+  const isGroupOver = isOver && activeDragPageId !== null;
+  const combinedRef = useCallback(
+    (node: HTMLElement | null) => {
+      setNodeRef(node);
+      registerDocumentElement(documentId, node);
+    },
+    [documentId, registerDocumentElement, setNodeRef]
+  );
+
+  return (
+    <section
+      ref={combinedRef}
+      tabIndex={-1}
+      aria-label={`Document group for ${documentName}`}
+      className={`document-stage w-full overflow-hidden px-3 py-4 sm:px-5 sm:py-5 flex flex-col gap-5 relative scroll-mt-20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-bright transition-[border-color,background-color] duration-200 ${
+        isNavigationHighlighted
+          ? "is-navigation-highlighted"
+          : isGroupOver && renderedItemCount === 0
+          ? "is-empty-drop-target"
+          : isTargetDocument
+            ? "is-drop-target"
+            : ""
+      }`}
+      id={`document-group-${documentId}`}
+    >
+      {children}
+    </section>
+  );
 };
 
 // Formats file sizes into human-readable labels
@@ -34,109 +137,158 @@ function formatBytes(bytes: number, decimals = 1) {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + " " + sizes[i];
 }
 
-export const DocumentGroup: React.FC<DocumentGroupProps> = ({
+const DocumentGroupComponent: React.FC<DocumentGroupProps> = ({
   document: doc,
-  onRemove,
+  onDeleteDocument,
+  onDuplicateDocument,
+  canDeleteDocument,
+  documentActionsDisabled,
   onUpdatePageThumbnail,
-  selectedPageId,
+  selectedPageIds,
+  activeSelectedPageId,
+  viewerPageId,
   onSelectPage,
   onOpenPageViewer,
-  onClearPageSelection,
+  onExportDocument,
   activeDragPageId,
   projectedTarget,
-  allDocuments,
+  activePage,
+  onRenameDocument,
+  isRenaming,
+  onStartRename,
+  onStopRename,
+  registerDocumentElement,
+  registerPageElement,
+  highlightedDocumentId,
+  highlightedPageId,
+  isActiveDocument,
 }) => {
+  const reduceMotion = useReducedMotion();
   const isLargeDoc = doc.pageCount >= 100;
+  const isTargetDoc = projectedTarget?.targetContainerId === doc.id;
+  const isSameContainerDrag = Boolean(
+    activePage &&
+      activeDragPageId === activePage.id &&
+      projectedTarget &&
+      projectedTarget.sourceContainerId === doc.id &&
+      projectedTarget.targetContainerId === doc.id
+  );
+  const isCrossContainerTarget = Boolean(
+    activePage &&
+      activeDragPageId === activePage.id &&
+      projectedTarget &&
+      projectedTarget.sourceContainerId !== projectedTarget.targetContainerId &&
+      projectedTarget.targetContainerId === doc.id
+  );
 
-  const { setNodeRef, isOver } = useDroppable({
-    id: `document:${doc.id}`,
-    data: {
-      type: "document",
-      documentId: doc.id,
-    },
-  });
+  const renderedItems = useMemo(() => {
+    if (activePage && projectedTarget && isSameContainerDrag) {
+      return buildSameContainerProjectedItems({
+        pages: doc.pages,
+        activePageId: activePage.id,
+        insertionSlot: projectedTarget.insertionSlot,
+      });
+    }
 
-  const isGroupOver = isOver && activeDragPageId !== null;
-  const isTargetDoc = projectedTarget && projectedTarget.targetContainerId === doc.id;
+    if (activePage && projectedTarget && isCrossContainerTarget) {
+      return buildCrossContainerProjectedItems({
+        pages: doc.pages,
+        activePage,
+        targetContainerId: doc.id,
+        insertionSlot: projectedTarget.insertionSlot,
+      });
+    }
 
-  const activePage = activeDragPageId
-    ? allDocuments?.flatMap((d) => d.pages).find((p) => p.id === activeDragPageId)
-    : null;
-
-  // Derive visual items for rendering
-  let renderedItems: (
-    | { type: "page"; id: string; page: typeof doc.pages[0]; isGhost?: boolean }
-    | { type: "ghost"; id: string; page: any; isGhost: boolean }
-  )[] = [];
-
-  if (activePage && isTargetDoc) {
-    const basePages = activePage.documentId === doc.id
-      ? doc.pages.filter((p) => p.id !== activePage.id)
-      : doc.pages;
-
-    const slot = Math.max(0, Math.min(projectedTarget.insertionSlot, basePages.length));
-
-    renderedItems = [
-      ...basePages.slice(0, slot).map((p) => ({
-        type: "page" as const,
-        id: p.id,
-        page: p,
-      })),
-      {
-        type: "ghost" as const,
-        id: `ghost:${activePage.id}`,
-        page: activePage,
-        isGhost: true,
-      },
-      ...basePages.slice(slot).map((p) => ({
-        type: "page" as const,
-        id: p.id,
-        page: p,
-      })),
-    ];
-  } else {
-    renderedItems = doc.pages.map((p) => ({
+    return doc.pages.map((page) => ({
       type: "page" as const,
-      id: p.id,
-      page: p,
+      id: page.id,
+      page,
     }));
+  }, [
+    activePage,
+    doc.id,
+    doc.pages,
+    isCrossContainerTarget,
+    isSameContainerDrag,
+    projectedTarget,
+  ]);
+  const sortablePageIds = useMemo(
+    () =>
+      doc.pages
+        .filter(
+          (page) => !isSameContainerDrag || page.id !== activeDragPageId
+        )
+        .map((page) => `page:${page.id}`),
+    [activeDragPageId, doc.pages, isSameContainerDrag]
+  );
+  const selectedPageIdSet = useMemo(
+    () => new Set(selectedPageIds),
+    [selectedPageIds]
+  );
+
+  if (
+    import.meta.env.DEV &&
+    isSameContainerDrag &&
+    renderedItems.length !== doc.pages.length
+  ) {
+    console.warn("[DND] Invalid same-container projected cell count", {
+      realPageCount: doc.pages.length,
+      projectedCellCount: renderedItems.length,
+      activePageId: activeDragPageId,
+      insertionSlot: projectedTarget?.insertionSlot,
+    });
   }
 
   return (
-    <section 
-      ref={setNodeRef}
-      aria-label={`Document group for ${doc.name}`}
-      className={`w-full bg-panel-elevated/10 border rounded-2xl p-4 sm:p-5 flex flex-col gap-5 shadow-lg relative scroll-mt-20 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue-bright transition-all duration-300 ${
-        isGroupOver && renderedItems.length === 0
-          ? "border-blue-bright bg-blue-bright/[0.04] shadow-[0_0_25px_rgba(0,245,255,0.08)] scale-[1.005]"
-          : isTargetDoc
-            ? "border-blue-bright/20 bg-blue-bright/[0.005]"
-            : "border-white/5"
-      }`}
-      id={`document-group-${doc.id}`}
+    <DocumentDropFrame
+      documentId={doc.id}
+      documentName={doc.name}
+      activeDragPageId={activeDragPageId}
+      isTargetDocument={isTargetDoc}
+      renderedItemCount={renderedItems.length}
+      registerDocumentElement={registerDocumentElement}
+      isNavigationHighlighted={highlightedDocumentId === doc.id}
     >
-      {/* 1. Group Header Area */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/5 pb-4">
-        {/* Color Accent, Doc Logo, Name, Size & Pages Count */}
-        <div className="flex items-start gap-3 min-w-0">
-          <div 
-            className="w-3.5 h-3.5 rounded-full mt-1.5 flex-shrink-0 shadow-sm"
+      <div className="document-stage-header flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+        <div className="flex min-w-0 items-start gap-3">
+          <motion.span
+            aria-hidden="true"
+            className="mt-0.5 h-9 w-0.5 flex-shrink-0 rounded-sm"
             style={{ backgroundColor: doc.color }}
+            initial={false}
+            animate={{
+              opacity: isActiveDocument || isTargetDoc ? 1 : 0.72,
+              scaleY: isTargetDoc && !reduceMotion ? 1.12 : 1,
+            }}
+            transition={
+              reduceMotion
+                ? reducedMotionTransition
+                : {
+                    duration: motionDurations.quick,
+                    ease: motionEasings.enter,
+                  }
+            }
           />
           <div className="min-w-0">
-            <h3 className="text-[14px] sm:text-[15px] font-extrabold text-primary-text tracking-tight truncate flex items-center gap-2">
-              <FileText className="w-4 h-4 text-muted-text flex-shrink-0" />
-              <span className="truncate">{doc.name}</span>
+            <h3 className="flex items-center gap-2 text-[14px] font-semibold tracking-[-0.025em] text-primary-text sm:text-[15px]">
+              <DocumentNameEditor
+                document={doc}
+                isEditing={isRenaming}
+                onStartEditing={() => onStartRename(doc.id)}
+                onStopEditing={onStopRename}
+                onRename={onRenameDocument}
+                variant="header"
+              />
             </h3>
-            <div className="flex items-center gap-2.5 text-[11px] text-muted-text font-bold uppercase tracking-wider mt-1.5">
-              <span>{formatBytes(doc.size)}</span>
-              <span className="w-1 h-1 bg-white/10 rounded-full" />
+            <div className="studio-number mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[10px] font-medium text-muted-text">
+              {doc.size > 0 && <span>{formatBytes(doc.size)}</span>}
+              {doc.size > 0 && <span className="h-3 w-px bg-white/10" aria-hidden="true" />}
               <span>{doc.pages.length} {doc.pages.length === 1 ? "page" : "pages"}</span>
               {doc.status === "ready" && isLargeDoc && (
                 <>
-                  <span className="w-1 h-1 bg-white/10 rounded-full" />
+                  <span className="h-3 w-px bg-white/10" aria-hidden="true" />
                   <span className="text-amber-400 font-extrabold flex items-center gap-1">
-                    <AlertTriangle className="w-3 h-3" /> Large Doc
+                    <AlertTriangle className="w-3 h-3" aria-hidden="true" /> Large document
                   </span>
                 </>
               )}
@@ -144,32 +296,48 @@ export const DocumentGroup: React.FC<DocumentGroupProps> = ({
           </div>
         </div>
 
-        {/* Action Controls & Document Status Indicators */}
-        <div className="flex items-center gap-3 sm:self-center">
+        <div className="document-command-plane flex items-center gap-1.5 sm:self-center">
           {doc.status === "loading" && (
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-white/5 bg-panel-elevated/40 text-blue-bright text-[11px] font-bold">
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              <span>Reading PDF...</span>
+            <div className="flex min-h-10 items-center gap-2 px-3 py-1.5 text-[11px] font-bold text-blue-bright">
+              <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />
+              <span>Reading PDF…</span>
             </div>
           )}
 
           {doc.status === "error" && (
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-red-500/20 bg-red-500/5 text-red-400 text-[11px] font-bold">
-              <ShieldAlert className="w-3.5 h-3.5" />
+            <div className="flex min-h-10 items-center gap-2 px-3 py-1.5 text-[11px] font-bold text-red-400">
+              <ShieldAlert className="w-3.5 h-3.5" aria-hidden="true" />
               <span>Error</span>
             </div>
           )}
 
-          {/* Remove Button */}
           <button
-            onClick={() => onRemove(doc.id)}
-            title={`Remove "${doc.name}" from workspace`}
-            aria-label={`Remove document "${doc.name}"`}
-            className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/5 hover:bg-red-500/10 border border-white/5 hover:border-red-500/20 text-muted-text hover:text-red-400 text-[11.5px] font-bold transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
+            type="button"
+            onClick={() => onExportDocument(doc.id)}
+            disabled={doc.status !== "ready" || doc.pages.length === 0}
+            title={
+              doc.pages.length === 0
+                ? "Add pages before exporting"
+                : `Export "${doc.name}"`
+            }
+            aria-label={`Export this document: ${doc.name}`}
+            className="studio-interactive flex min-h-10 items-center gap-2 rounded-[8px] border border-transparent px-3 py-1.5 text-[11.5px] font-semibold text-secondary-text enabled:hover:border-blue-bright/20 enabled:hover:bg-blue-accent/[0.08] enabled:hover:text-blue-bright enabled:cursor-pointer disabled:cursor-not-allowed disabled:opacity-35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-bright"
           >
-            <Trash2 className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Remove</span>
+            <Download className="w-3.5 h-3.5" aria-hidden="true" />
+            <span className="hidden sm:inline">Export this document</span>
           </button>
+
+          <DocumentActionsMenu
+            document={doc}
+            canDelete={canDeleteDocument}
+            actionsDisabled={
+              documentActionsDisabled || doc.status === "loading"
+            }
+            onRename={() => onStartRename(doc.id)}
+            onDuplicate={() => onDuplicateDocument(doc.id)}
+            onDelete={() => onDeleteDocument(doc.id)}
+            surface="canvas"
+          />
         </div>
       </div>
 
@@ -184,13 +352,12 @@ export const DocumentGroup: React.FC<DocumentGroupProps> = ({
         </div>
       )}
 
-      {/* 2. Grid Area / Loading Skeletons / Page Failure State / Empty State */}
-      <div className="relative min-h-[140px] flex items-center justify-center">
+      <div className="relative flex min-h-[140px] items-center justify-center">
         {doc.status === "loading" && (
           <div className="flex flex-col items-center justify-center py-10 gap-3 text-muted-text select-none">
             <Loader2 className="w-8 h-8 animate-spin text-blue-bright" />
-            <p className="text-[12.5px] font-bold tracking-wide">Allocating client sandbox memory...</p>
-            <p className="text-[11px] opacity-70">All operations are private and executed locally in your browser.</p>
+            <p className="text-[12.5px] font-bold">Creating page previews…</p>
+            <p className="text-[11px] opacity-70">The PDF is being processed locally in this browser.</p>
           </div>
         )}
 
@@ -205,35 +372,34 @@ export const DocumentGroup: React.FC<DocumentGroupProps> = ({
         )}
 
         {doc.status === "ready" && renderedItems.length === 0 && (
-          <div 
-            className={`w-full py-12 border-2 border-dashed rounded-xl flex flex-col items-center justify-center text-center gap-3 transition-all duration-300 ${
-              isGroupOver 
-                ? "border-blue-bright bg-blue-bright/5 text-blue-bright shadow-[0_0_15px_rgba(0,245,255,0.1)]" 
-                : "border-white/10 bg-white/5/20 text-muted-text hover:border-white/15"
+          <div
+            className={`document-empty-stage flex w-full flex-col items-center justify-center gap-4 py-11 text-center transition-[border-color,background-color] duration-200 ${
+              isTargetDoc && activeDragPageId
+                ? "is-target text-blue-bright"
+                : "text-muted-text"
             }`}
           >
-            <Move className={`w-8 h-8 ${isGroupOver ? "animate-bounce" : ""}`} />
+            <div className="empty-paper-stack" aria-hidden="true">
+              <span />
+              <span />
+              <span />
+            </div>
             <div>
-              <p className="text-[13px] font-bold">This document group is empty</p>
-              <p className="text-[11.5px] text-muted-text mt-1 max-w-[240px] mx-auto font-medium leading-relaxed">
-                Drop page here
+              <p className="text-[13px] font-semibold text-secondary-text">Drop pages here</p>
+              <p className="mx-auto mt-1 max-w-[250px] text-[11.5px] font-medium leading-relaxed text-muted-text">
+                Drag pages here, or use Move and Copy from the command dock.
               </p>
             </div>
           </div>
         )}
 
         {doc.status === "ready" && renderedItems.length > 0 && (
-          <SortableContext
-            items={renderedItems
-              .filter((item) => item.type === "page")
-              .map((item) => `page:${item.id}`)}
-            strategy={rectSortingStrategy}
-          >
+          <SortableContext items={sortablePageIds} strategy={rectSortingStrategy}>
             <div 
-              className="w-full grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-x-4 gap-y-6 justify-items-center"
+              className="workspace-page-grid grid w-full justify-items-center gap-x-5 gap-y-8"
               role="list"
             >
-              {renderedItems.map((item, idx) => {
+              {renderedItems.map((item) => {
                 const isGhost = item.type === "ghost";
                 const page = item.page;
 
@@ -243,7 +409,7 @@ export const DocumentGroup: React.FC<DocumentGroupProps> = ({
                       <ProjectedPageGhost
                         page={page}
                         containerId={doc.id}
-                        insertionSlot={projectedTarget?.insertionSlot ?? idx}
+                        insertionSlot={item.insertionSlot}
                         docColor={doc.color}
                       />
                     ) : (
@@ -252,6 +418,7 @@ export const DocumentGroup: React.FC<DocumentGroupProps> = ({
                         documentId={page.documentId}
                         sourceDocumentId={page.sourceDocumentId}
                         originalPageIndex={page.originalPageIndex}
+                        rotation={page.rotation}
                         pageNumber={page.pageNumber}
                         thumbnailStatus={page.thumbnailStatus}
                         thumbnailUrl={page.thumbnailUrl}
@@ -259,11 +426,15 @@ export const DocumentGroup: React.FC<DocumentGroupProps> = ({
                         docName={doc.name}
                         errorMessage={page.errorMessage}
                         onStatusChange={onUpdatePageThumbnail}
-                        isSelected={page.id === selectedPageId}
+                        isSelected={selectedPageIdSet.has(page.id)}
+                        isActive={page.id === activeSelectedPageId}
+                        isViewerPage={page.id === viewerPageId}
                         onSelect={onSelectPage}
                         onOpenViewer={onOpenPageViewer}
-                        onClearSelection={onClearPageSelection}
                         activeDragPageId={activeDragPageId}
+                        registerPageElement={registerPageElement}
+                        isNavigationHighlighted={highlightedPageId === page.id}
+                        isActiveDocument={isActiveDocument}
                       />
                     )}
                   </div>
@@ -273,6 +444,8 @@ export const DocumentGroup: React.FC<DocumentGroupProps> = ({
           </SortableContext>
         )}
       </div>
-    </section>
+    </DocumentDropFrame>
   );
 };
+
+export const DocumentGroup = React.memo(DocumentGroupComponent);

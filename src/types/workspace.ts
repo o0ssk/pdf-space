@@ -16,10 +16,20 @@ export type WorkspacePage = {
   sourceDocumentId: string; // immutable original source PDF document ID
   originalPageIndex: number; // 0-based index from the original PDF
   pageNumber: number;        // 1-based readable page number in current container
-  rotation: 0 | 90 | 180 | 270;
+  rotation: PageRotation;
+  duplicatedFromPageId?: string | undefined;
   thumbnailStatus: ThumbnailStatus;
-  thumbnailUrl?: string;
-  errorMessage?: string;
+  thumbnailUrl?: string | undefined;
+  errorMessage?: string | undefined;
+};
+
+export type PageRotation = 0 | 90 | 180 | 270;
+
+export type PageRotationDirection = "left" | "right";
+
+export type PageDuplicateRequest = {
+  sourcePageId: string;
+  newPageId: string;
 };
 
 export type WorkspaceDocument = {
@@ -31,7 +41,7 @@ export type WorkspaceDocument = {
   color: string;
   status: DocumentStatus;
   pages: WorkspacePage[];
-  errorMessage?: string;
+  errorMessage?: string | undefined;
 };
 
 export type WorkspaceSourceDocument = {
@@ -41,6 +51,7 @@ export type WorkspaceSourceDocument = {
   mimeType: string;
   originalPageCount: number;
   importedAt: number;
+  lastModified?: number | undefined;
 };
 
 export type WorkspaceSourceDocuments = Record<string, WorkspaceSourceDocument>;
@@ -54,10 +65,23 @@ export type WorkspaceProject = {
   updatedAt: number;
 };
 
+export type WorkspaceSelectionState = {
+  selectedPageIds: string[];
+  anchorPageId: string | null;
+  activePageId: string | null;
+  activeContainerId: string | null;
+};
+
+export type PageSelectionModifiers = {
+  toggle?: boolean | undefined;
+  range?: boolean | undefined;
+  preserveExisting?: boolean | undefined;
+};
+
 export type ImportedDocumentSource = {
   documentId: string;
   file: File;
-  arrayBuffer?: ArrayBuffer;
+  arrayBuffer?: ArrayBuffer | undefined;
 };
 
 export type ProjectedPageDrop = {
@@ -65,9 +89,30 @@ export type ProjectedPageDrop = {
   sourceContainerId: string;
   targetContainerId: string;
   insertionSlot: number;
-  overPageId?: string;
-  placement: "before" | "after" | "start" | "end" | "empty";
 };
+
+export type WorkspacePageDragData = {
+  type: "page";
+  pageId: string;
+  containerId: string;
+  index: number;
+};
+
+export type WorkspaceDocumentDragData = {
+  type: "document";
+  documentId: string;
+};
+
+export type WorkspaceDragData =
+  | WorkspacePageDragData
+  | WorkspaceDocumentDragData;
+
+export type InsertionPlacement =
+  | "before"
+  | "after"
+  | "start"
+  | "end"
+  | "empty";
 
 export function getTargetBasePages({
   documents,
@@ -99,8 +144,8 @@ export function getInsertionSlotForPlacement({
   overPageId,
 }: {
   pages: WorkspacePage[];
-  placement: ProjectedPageDrop["placement"];
-  overPageId?: string;
+  placement: InsertionPlacement;
+  overPageId?: string | undefined;
 }): number | null {
   if (placement === "start" || placement === "empty") return 0;
   if (placement === "end") return pages.length;

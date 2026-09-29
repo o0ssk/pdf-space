@@ -2,10 +2,14 @@ import { useEffect, useRef } from "react";
 
 type UseFocusTrapProps = {
   isOpen: boolean;
+  restoreFocus?: boolean;
 };
 
-export function useFocusTrap({ isOpen }: UseFocusTrapProps) {
-  const containerRef = useRef<HTMLElement | null>(null);
+export function useFocusTrap<T extends HTMLElement = HTMLElement>({
+  isOpen,
+  restoreFocus = true,
+}: UseFocusTrapProps) {
+  const containerRef = useRef<T | null>(null);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -28,7 +32,7 @@ export function useFocusTrap({ isOpen }: UseFocusTrapProps) {
     ].join(",");
 
     const getFocusableElements = (): HTMLElement[] => {
-      return Array.from(container.querySelectorAll<HTMLElement>(focusableSelectors)) as HTMLElement[];
+      return Array.from(container.querySelectorAll<HTMLElement>(focusableSelectors));
     };
 
     // Store the element that was focused before opening the dialog
@@ -39,7 +43,7 @@ export function useFocusTrap({ isOpen }: UseFocusTrapProps) {
     if (focusableElements.length > 0) {
       // Focus the close button or first button. We can look for close button or first element.
       // Let's focus the container or first element to restore focus nicely.
-      focusableElements[0].focus();
+      focusableElements[0]?.focus();
     } else {
       container.focus();
     }
@@ -59,13 +63,13 @@ export function useFocusTrap({ isOpen }: UseFocusTrapProps) {
       if (e.shiftKey) {
         // Shift + Tab: if focus is on first, move to last
         if (document.activeElement === firstElement) {
-          lastElement.focus();
+          lastElement?.focus();
           e.preventDefault();
         }
       } else {
         // Tab: if focus is on last, move to first
         if (document.activeElement === lastElement) {
-          firstElement.focus();
+          firstElement?.focus();
           e.preventDefault();
         }
       }
@@ -76,13 +80,17 @@ export function useFocusTrap({ isOpen }: UseFocusTrapProps) {
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
       // Restore focus on close
-      if (previousActiveElement && typeof previousActiveElement.focus === "function") {
+      if (
+        restoreFocus &&
+        previousActiveElement?.isConnected &&
+        typeof previousActiveElement.focus === "function"
+      ) {
         setTimeout(() => {
           previousActiveElement.focus();
         }, 50);
       }
     };
-  }, [isOpen]);
+  }, [isOpen, restoreFocus]);
 
   return { containerRef };
 }

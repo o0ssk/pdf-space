@@ -1,4 +1,4 @@
-export const PDF_SPACE_PAGE_DRAG_TYPE = "application/x-pdf-space-page";
+const PDF_SPACE_PAGE_DRAG_TYPE = "application/x-pdf-space-page";
 
 /**
  * Robust helper to identify if a drag-and-drop event represents an external
@@ -8,7 +8,7 @@ export function isExternalFileDrag(dataTransfer: DataTransfer | null): boolean {
   if (!dataTransfer) return false;
 
   // Safeguard: Check global flag if internal page dragging is active
-  if ((window as any).isInternalDragging) {
+  if (window.isInternalDragging) {
     return false;
   }
 

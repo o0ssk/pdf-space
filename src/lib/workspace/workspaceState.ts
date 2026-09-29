@@ -1,16 +1,41 @@
 import {
   WorkspaceDocument,
+  PageDuplicateRequest,
+  PageRotationDirection,
   WorkspacePage,
   WorkspaceSourceDocument,
   WorkspaceSourceDocuments,
+  WorkspaceSelectionState,
   clampInsertionSlot,
 } from "../../types/workspace";
+import {
+  clearSelection,
+  emptyWorkspaceSelection,
+  pruneSelection,
+  selectAllInContainer,
+  selectPageOnly,
+  selectPageRange,
+  toggleSelectedPage,
+} from "../selection/pageSelection";
+import {
+  copyPagesToContainer,
+  deletePages,
+  duplicatePages,
+  movePagesToContainer,
+  rotatePages,
+} from "./pageOperations";
+import {
+  deleteWorkspaceDocument,
+  duplicateWorkspaceDocument,
+  renameWorkspaceDocument,
+  reorderWorkspaceDocuments,
+} from "./documentOperations";
 
 export type WorkspaceState = {
   documents: WorkspaceDocument[];
   sourceDocuments: WorkspaceSourceDocuments;
   selectedDocumentId: string | null;
-  selectedPageId: string | null;
+  selection: WorkspaceSelectionState;
   viewerOpen: boolean;
   viewerPageId: string | null;
   viewerDocumentId: string | null;
@@ -38,16 +63,67 @@ export type WorkspaceAction =
     }
   | { type: "ADD_DOCUMENT_ERROR"; payload: { id: string; errorMessage: string } }
   | { type: "REMOVE_DOCUMENT"; payload: { id: string } }
+  | { type: "DELETE_DOCUMENT"; payload: { id: string } }
+  | {
+      type: "DUPLICATE_DOCUMENT";
+      payload: {
+        sourceDocumentId: string;
+        newDocumentId: string;
+        newPageIds: string[];
+      };
+    }
+  | {
+      type: "CREATE_EMPTY_DOCUMENT";
+      payload: { document: WorkspaceDocument };
+    }
+  | {
+      type: "RENAME_DOCUMENT";
+      payload: { id: string; name: string };
+    }
+  | {
+      type: "REORDER_DOCUMENTS";
+      payload: { activeDocumentId: string; overDocumentId: string };
+    }
   | {
       type: "UPDATE_PAGE_BY_ID";
       payload: { pageId: string; changes: WorkspacePageChanges };
     }
   | { type: "SELECT_DOCUMENT"; payload: { id: string | null } }
+  | { type: "SELECT_PAGE_ONLY"; payload: { pageId: string; containerId: string } }
+  | { type: "TOGGLE_PAGE_SELECTION"; payload: { pageId: string; containerId: string } }
   | {
-      type: "SELECT_PAGE";
-      payload: { pageId: string | null; documentId: string | null };
+      type: "SELECT_PAGE_RANGE";
+      payload: {
+        targetPageId: string;
+        containerId: string;
+        preserveExisting: boolean;
+      };
     }
-  | { type: "CLEAR_PAGE_SELECTION" }
+  | { type: "SELECT_ALL_IN_CONTAINER"; payload: { containerId: string } }
+  | { type: "CLEAR_SELECTION" }
+  | {
+      type: "ROTATE_PAGES";
+      payload: { pageIds: string[]; direction: PageRotationDirection };
+    }
+  | {
+      type: "DUPLICATE_PAGES";
+      payload: { duplicates: PageDuplicateRequest[] };
+    }
+  | {
+      type: "DELETE_PAGES";
+      payload: { pageIds: string[] };
+    }
+  | {
+      type: "MOVE_PAGES_TO_CONTAINER";
+      payload: { pageIds: string[]; targetContainerId: string };
+    }
+  | {
+      type: "COPY_PAGES_TO_CONTAINER";
+      payload: {
+        copies: PageDuplicateRequest[];
+        targetContainerId: string;
+      };
+    }
   | { type: "OPEN_PAGE_VIEWER"; payload: { pageId: string; documentId: string } }
   | { type: "CLOSE_PAGE_VIEWER" }
   | { type: "SET_VIEWER_PAGE"; payload: { pageId: string; documentId: string } }
@@ -66,7 +142,7 @@ export const initialWorkspaceState: WorkspaceState = {
   documents: [],
   sourceDocuments: {},
   selectedDocumentId: null,
-  selectedPageId: null,
+  selection: emptyWorkspaceSelection,
   viewerOpen: false,
   viewerPageId: null,
   viewerDocumentId: null,
@@ -96,7 +172,7 @@ export function updatePageById(
 
     updated = true;
     const pages = [...document.pages];
-    pages[pageIndex] = { ...pages[pageIndex], ...changes };
+    pages[pageIndex] = { ...pages[pageIndex]!, ...changes };
     return { ...document, pages };
   });
 
@@ -141,6 +217,33 @@ export function pruneSourceDocuments(
   return Object.fromEntries(nextEntries);
 }
 
+export function insertPageAtSlot(
+  pages: WorkspacePage[],
+  activePageId: string,
+  insertionSlot: number
+): WorkspacePage[] {
+  const activePage = pages.find((page) => page.id === activePageId);
+  if (!activePage) return pages;
+
+  const basePages = pages.filter((page) => page.id !== activePageId);
+  const safeSlot = clampInsertionSlot(insertionSlot, basePages.length);
+  return [
+    ...basePages.slice(0, safeSlot),
+    activePage,
+    ...basePages.slice(safeSlot),
+  ];
+}
+
+export function haveSamePageOrder(
+  current: WorkspacePage[],
+  proposed: WorkspacePage[]
+): boolean {
+  return (
+    current.length === proposed.length &&
+    current.every((page, index) => page.id === proposed[index]?.id)
+  );
+}
+
 function omitSourceDocument(
   sourceDocuments: WorkspaceSourceDocuments,
   sourceDocumentId: string
@@ -149,6 +252,33 @@ function omitSourceDocument(
   const next = { ...sourceDocuments };
   delete next[sourceDocumentId];
   return next;
+}
+
+function createOperationSelection(
+  documents: WorkspaceDocument[],
+  pageIds: string[],
+  preferredContainerId?: string
+): WorkspaceSelectionState {
+  const validPagesById = new Map(
+    documents.flatMap((document) =>
+      document.pages.map((page) => [page.id, page] as const)
+    )
+  );
+  const selectedPageIds = [...new Set(pageIds)].filter((pageId) =>
+    validPagesById.has(pageId)
+  );
+  const activePageId = selectedPageIds[selectedPageIds.length - 1] ?? null;
+  const activePage = activePageId
+    ? validPagesById.get(activePageId) ?? null
+    : null;
+
+  return {
+    selectedPageIds,
+    anchorPageId: selectedPageIds[0] ?? null,
+    activePageId,
+    activeContainerId:
+      preferredContainerId ?? activePage?.documentId ?? null,
+  };
 }
 
 export function workspaceReducer(
@@ -196,7 +326,7 @@ export function workspaceReducer(
           ? {
               ...state.sourceDocuments,
               [action.payload.id]: {
-                ...state.sourceDocuments[action.payload.id],
+                ...state.sourceDocuments[action.payload.id]!,
                 originalPageCount: action.payload.pageCount,
               },
             }
@@ -222,15 +352,8 @@ export function workspaceReducer(
       };
 
     case "REMOVE_DOCUMENT": {
-      const removedDocument = state.documents.find(
-        (document) => document.id === action.payload.id
-      );
       const remainingDocuments = state.documents.filter(
         (document) => document.id !== action.payload.id
-      );
-      const selectedPageWasRemoved = Boolean(
-        state.selectedPageId &&
-          removedDocument?.pages.some((page) => page.id === state.selectedPageId)
       );
       const viewerDocumentWasRemoved = state.viewerDocumentId === action.payload.id;
 
@@ -245,13 +368,102 @@ export function workspaceReducer(
           state.selectedDocumentId === action.payload.id
             ? remainingDocuments[0]?.id ?? null
             : state.selectedDocumentId,
-        selectedPageId: selectedPageWasRemoved ? null : state.selectedPageId,
+        selection: pruneSelection(state.selection, remainingDocuments),
         viewerOpen: viewerDocumentWasRemoved ? false : state.viewerOpen,
         viewerPageId: viewerDocumentWasRemoved ? null : state.viewerPageId,
         viewerDocumentId: viewerDocumentWasRemoved
           ? null
           : state.viewerDocumentId,
       };
+    }
+
+    case "DELETE_DOCUMENT": {
+      const result = deleteWorkspaceDocument(
+        state.documents,
+        action.payload.id,
+        state.selectedDocumentId
+      );
+      if (!result) return state;
+      const selection = pruneSelection(
+        state.selection,
+        result.documents
+      );
+      const viewerDocumentWasDeleted =
+        state.viewerDocumentId === action.payload.id;
+
+      return {
+        ...state,
+        documents: result.documents,
+        sourceDocuments: state.sourceDocuments,
+        selectedDocumentId: result.nextActiveDocumentId,
+        selection:
+          selection.activeContainerId === null
+            ? {
+                ...selection,
+                activeContainerId: result.nextActiveDocumentId,
+              }
+            : selection,
+        viewerOpen: viewerDocumentWasDeleted ? false : state.viewerOpen,
+        viewerPageId: viewerDocumentWasDeleted ? null : state.viewerPageId,
+        viewerDocumentId: viewerDocumentWasDeleted
+          ? null
+          : state.viewerDocumentId,
+      };
+    }
+
+    case "DUPLICATE_DOCUMENT": {
+      const documents = duplicateWorkspaceDocument({
+        documents: state.documents,
+        sourceDocumentId: action.payload.sourceDocumentId,
+        newDocumentId: action.payload.newDocumentId,
+        newPageIds: action.payload.newPageIds,
+      });
+      if (documents === state.documents) return state;
+      return {
+        ...state,
+        documents,
+        selectedDocumentId: action.payload.newDocumentId,
+      };
+    }
+
+    case "CREATE_EMPTY_DOCUMENT": {
+      if (
+        state.documents.some(
+          (document) => document.id === action.payload.document.id
+        )
+      ) {
+        return state;
+      }
+      const document = action.payload.document;
+      return {
+        ...state,
+        documents: [...state.documents, document],
+        selectedDocumentId: document.id,
+        selection: {
+          selectedPageIds: [],
+          anchorPageId: null,
+          activePageId: null,
+          activeContainerId: document.id,
+        },
+      };
+    }
+
+    case "RENAME_DOCUMENT": {
+      const documents = renameWorkspaceDocument(
+        state.documents,
+        action.payload.id,
+        action.payload.name
+      );
+      return documents === state.documents ? state : { ...state, documents };
+    }
+
+    case "REORDER_DOCUMENTS": {
+      const documents = reorderWorkspaceDocuments(
+        state.documents,
+        action.payload.activeDocumentId,
+        action.payload.overDocumentId
+      );
+      return documents === state.documents ? state : { ...state, documents };
     }
 
     case "MOVE_PAGE": {
@@ -271,16 +483,12 @@ export function workspaceReducer(
       let documents = state.documents;
 
       if (sourceContainerId === targetContainerId) {
-        const basePages = sourceContainer.pages.filter((page) => page.id !== pageId);
-        const safeSlot = clampInsertionSlot(insertionSlot, basePages.length);
-        const nextPages = [
-          ...basePages.slice(0, safeSlot),
-          activePage,
-          ...basePages.slice(safeSlot),
-        ];
-        const isNoOp = nextPages.every(
-          (page, index) => page.id === sourceContainer.pages[index]?.id
+        const nextPages = insertPageAtSlot(
+          sourceContainer.pages,
+          pageId,
+          insertionSlot
         );
+        const isNoOp = haveSamePageOrder(sourceContainer.pages, nextPages);
 
         if (isNoOp) return state;
 
@@ -329,13 +537,121 @@ export function workspaceReducer(
         ...state,
         documents,
         selectedDocumentId:
-          state.selectedPageId === pageId
+          state.selection.activePageId === pageId
             ? targetContainerId
             : state.selectedDocumentId,
+        selection:
+          state.selection.activePageId === pageId
+            ? { ...state.selection, activeContainerId: targetContainerId }
+            : state.selection,
         viewerDocumentId:
           state.viewerPageId === pageId
             ? targetContainerId
             : state.viewerDocumentId,
+      };
+    }
+
+    case "ROTATE_PAGES": {
+      const documents = rotatePages(
+        state.documents,
+        action.payload.pageIds,
+        action.payload.direction
+      );
+      return documents === state.documents ? state : { ...state, documents };
+    }
+
+    case "DUPLICATE_PAGES": {
+      const documents = duplicatePages(
+        state.documents,
+        action.payload.duplicates
+      );
+      if (documents === state.documents) return state;
+
+      const duplicateIds = action.payload.duplicates.map(
+        (duplicate) => duplicate.newPageId
+      );
+      const selection = createOperationSelection(documents, duplicateIds);
+
+      return {
+        ...state,
+        documents,
+        selection,
+        selectedDocumentId:
+          selection.activeContainerId ?? state.selectedDocumentId,
+      };
+    }
+
+    case "COPY_PAGES_TO_CONTAINER": {
+      const documents = copyPagesToContainer(
+        state.documents,
+        action.payload.targetContainerId,
+        action.payload.copies
+      );
+      if (documents === state.documents) return state;
+
+      const copiedPageIds = action.payload.copies.map(
+        (copy) => copy.newPageId
+      );
+
+      return {
+        ...state,
+        documents,
+        selection: createOperationSelection(
+          documents,
+          copiedPageIds,
+          action.payload.targetContainerId
+        ),
+        selectedDocumentId: action.payload.targetContainerId,
+      };
+    }
+
+    case "MOVE_PAGES_TO_CONTAINER": {
+      const documents = movePagesToContainer(
+        state.documents,
+        action.payload.pageIds,
+        action.payload.targetContainerId
+      );
+      if (documents === state.documents) return state;
+
+      const movedPageIdSet = new Set(action.payload.pageIds);
+      return {
+        ...state,
+        documents,
+        selection: createOperationSelection(
+          documents,
+          action.payload.pageIds,
+          action.payload.targetContainerId
+        ),
+        selectedDocumentId: action.payload.targetContainerId,
+        viewerDocumentId:
+          state.viewerPageId && movedPageIdSet.has(state.viewerPageId)
+            ? action.payload.targetContainerId
+            : state.viewerDocumentId,
+      };
+    }
+
+    case "DELETE_PAGES": {
+      const deletedPageIdSet = new Set(action.payload.pageIds);
+      const documents = deletePages(state.documents, action.payload.pageIds);
+      if (documents === state.documents) return state;
+
+      const viewerPageWasDeleted =
+        state.viewerPageId !== null &&
+        deletedPageIdSet.has(state.viewerPageId);
+
+      return {
+        ...state,
+        documents,
+        sourceDocuments: pruneSourceDocuments(
+          state.sourceDocuments,
+          documents
+        ),
+        selection: pruneSelection(state.selection, documents),
+        viewerOpen: viewerPageWasDeleted ? false : state.viewerOpen,
+        viewerPageId: viewerPageWasDeleted ? null : state.viewerPageId,
+        viewerDocumentId: viewerPageWasDeleted
+          ? null
+          : state.viewerDocumentId,
       };
     }
 
@@ -349,18 +665,63 @@ export function workspaceReducer(
     }
 
     case "SELECT_DOCUMENT":
-      return { ...state, selectedDocumentId: action.payload.id };
-
-    case "SELECT_PAGE":
       return {
         ...state,
-        selectedPageId: action.payload.pageId,
-        selectedDocumentId:
-          action.payload.documentId || state.selectedDocumentId,
+        selectedDocumentId: action.payload.id,
+        selection: {
+          ...state.selection,
+          activeContainerId: action.payload.id,
+        },
       };
 
-    case "CLEAR_PAGE_SELECTION":
-      return { ...state, selectedPageId: null };
+    case "SELECT_PAGE_ONLY":
+      return {
+        ...state,
+        selection: selectPageOnly(
+          state.selection,
+          action.payload.pageId,
+          action.payload.containerId
+        ),
+        selectedDocumentId: action.payload.containerId,
+      };
+
+    case "TOGGLE_PAGE_SELECTION":
+      return {
+        ...state,
+        selection: toggleSelectedPage(
+          state.selection,
+          action.payload.pageId,
+          action.payload.containerId
+        ),
+        selectedDocumentId: action.payload.containerId,
+      };
+
+    case "SELECT_PAGE_RANGE":
+      return {
+        ...state,
+        selection: selectPageRange(
+          state.selection,
+          state.documents,
+          action.payload.targetPageId,
+          action.payload.containerId,
+          action.payload.preserveExisting
+        ),
+        selectedDocumentId: action.payload.containerId,
+      };
+
+    case "SELECT_ALL_IN_CONTAINER":
+      return {
+        ...state,
+        selection: selectAllInContainer(
+          state.selection,
+          state.documents,
+          action.payload.containerId
+        ),
+        selectedDocumentId: action.payload.containerId,
+      };
+
+    case "CLEAR_SELECTION":
+      return { ...state, selection: clearSelection(state.selection) };
 
     case "OPEN_PAGE_VIEWER":
       return {
@@ -368,7 +729,11 @@ export function workspaceReducer(
         viewerOpen: true,
         viewerPageId: action.payload.pageId,
         viewerDocumentId: action.payload.documentId,
-        selectedPageId: action.payload.pageId,
+        selection: selectPageOnly(
+          state.selection,
+          action.payload.pageId,
+          action.payload.documentId
+        ),
         selectedDocumentId: action.payload.documentId,
       };
 
@@ -385,7 +750,11 @@ export function workspaceReducer(
         ...state,
         viewerPageId: action.payload.pageId,
         viewerDocumentId: action.payload.documentId,
-        selectedPageId: action.payload.pageId,
+        selection: selectPageOnly(
+          state.selection,
+          action.payload.pageId,
+          action.payload.documentId
+        ),
         selectedDocumentId: action.payload.documentId,
       };
 

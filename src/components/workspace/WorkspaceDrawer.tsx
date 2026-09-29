@@ -1,5 +1,5 @@
 import React, { useEffect } from "react";
-import { motion, AnimatePresence, useReducedMotion } from "motion/react";
+import { motion, AnimatePresence, useReducedMotion, type Variants } from "motion/react";
 import { X } from "lucide-react";
 
 type DrawerProps = {
@@ -42,7 +42,7 @@ export const WorkspaceDrawer: React.FC<DrawerProps> = ({
     };
   }, [isOpen]);
 
-  const slideVariants = {
+  const slideVariants: Variants = {
     hidden: {
       x: position === "left" ? "-100%" : "100%",
     },
@@ -67,7 +67,7 @@ export const WorkspaceDrawer: React.FC<DrawerProps> = ({
             exit={{ opacity: 0 }}
             transition={{ duration: shouldReduceMotion ? 0 : 0.2 }}
             onClick={onClose}
-            className="fixed inset-0 z-40 bg-black/60 backdrop-blur-xs cursor-pointer"
+            className="studio-dialog-overlay fixed inset-0 z-40 cursor-pointer"
             aria-hidden="true"
           />
 
@@ -80,7 +80,7 @@ export const WorkspaceDrawer: React.FC<DrawerProps> = ({
             initial="hidden"
             animate="visible"
             exit="exit"
-            className={`fixed top-0 bottom-0 z-50 w-[290px] max-w-[85vw] bg-panel-bg border-border-main flex flex-col shadow-2xl focus:outline-none ${
+            className={`command-surface fixed bottom-0 top-0 z-50 flex w-[290px] max-w-[85vw] flex-col rounded-none border-y-0 shadow-dialog focus:outline-none ${
               position === "left"
                 ? "left-0 border-r"
                 : "right-0 border-l"

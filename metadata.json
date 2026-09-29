@@ -1,6 +1,6 @@
 {
   "name": "PDF Space",
-  "description": "A frontend visual landing page representing the PDF Space workspace concept for organizing documents, reordering pages, and exporting Smart PDFs.",
+  "description": "A local-first visual PDF workspace for organizing document groups, editing page order, and exporting standard PDFs.",
   "requestFramePermissions": [],
   "majorCapabilities": []
 }

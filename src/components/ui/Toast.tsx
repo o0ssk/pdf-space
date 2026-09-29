@@ -7,9 +7,9 @@ export type ToastType = "success" | "info" | "warning" | "sparkles";
 export interface ToastMessage {
   id: string;
   title: string;
-  description?: string;
-  type?: ToastType;
-  duration?: number;
+  description?: string | undefined;
+  type?: ToastType | undefined;
+  duration?: number | undefined;
 }
 
 interface ToastContextType {
@@ -59,7 +59,7 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
               initial={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: 30, scale: 0.95 }}
               animate={shouldReduceMotion ? { opacity: 1 } : { opacity: 1, y: 0, scale: 1 }}
               exit={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.92, transition: { duration: 0.15 } }}
-              className="bg-panel-elevated/95 backdrop-blur-md border border-border-main rounded-[16px] p-4 shadow-xl pointer-events-auto flex gap-3 relative overflow-hidden"
+              className="command-surface pointer-events-auto relative flex gap-3 overflow-hidden p-4"
             >
               {/* Highlight bar */}
               <div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-accent" />
@@ -74,7 +74,7 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                   <AlertTriangle className="w-5 h-5 text-amber-500" aria-hidden="true" focusable="false" />
                 )}
                 {toast.type === "sparkles" && (
-                  <Sparkles className="w-5 h-5 text-violet-accent animate-pulse" aria-hidden="true" focusable="false" />
+                  <Sparkles className="h-5 w-5 animate-pulse text-blue-bright" aria-hidden="true" focusable="false" />
                 )}
               </div>
               <div className="flex-grow">

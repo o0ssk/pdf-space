@@ -1,19 +1,23 @@
-import React, { useState, useEffect } from "react";
-import { 
-  X, 
-  ZoomIn, 
-  ZoomOut, 
-  ChevronLeft, 
-  ChevronRight, 
-  RefreshCw, 
-  AlertCircle, 
+import React, { useState, useEffect, useMemo } from "react";
+import {
+  X,
+  ZoomIn,
+  ZoomOut,
+  ChevronLeft,
+  ChevronRight,
+  RefreshCw,
+  AlertCircle,
   Loader2,
   Maximize,
-  StretchHorizontal
+  StretchHorizontal,
+  RotateCcw,
+  RotateCw,
+  Trash2,
 } from "lucide-react";
 import { WorkspaceDocument } from "../../../types/workspace";
 import { useFocusTrap } from "../../../hooks/useFocusTrap";
 import { usePageViewerRender } from "../../../hooks/usePageViewerRender";
+import { PdfTextViewerContext } from "../../../lib/pdf-text/pdfTextTypes";
 
 type PageViewerDialogProps = {
   isOpen: boolean;
@@ -22,6 +26,11 @@ type PageViewerDialogProps = {
   documentId: string | null;
   documents: WorkspaceDocument[];
   onPageChange: (pageId: string, documentId: string) => void;
+  onRotateLeft: () => void;
+  onRotateRight: () => void;
+  onDelete: () => void;
+  suspendShortcuts?: boolean;
+  searchContext?: PdfTextViewerContext | null;
 };
 
 export const PageViewerDialog: React.FC<PageViewerDialogProps> = ({
@@ -31,9 +40,16 @@ export const PageViewerDialog: React.FC<PageViewerDialogProps> = ({
   documentId,
   documents,
   onPageChange,
+  onRotateLeft,
+  onRotateRight,
+  onDelete,
+  suspendShortcuts = false,
+  searchContext = null,
 }) => {
   // Trap keyboard focus for accessibility
-  const { containerRef } = useFocusTrap({ isOpen });
+  const { containerRef } = useFocusTrap<HTMLDivElement>({
+    isOpen: isOpen && !suspendShortcuts,
+  });
 
   // Zoom and Display Mode State
   const [zoom, setZoom] = useState(100);
@@ -41,9 +57,15 @@ export const PageViewerDialog: React.FC<PageViewerDialogProps> = ({
 
   // Lookup document and current page index
   const doc = documentId ? documents.find((d) => d.id === documentId) : null;
-  const pages = doc?.pages || [];
+  const pages = useMemo(() => doc?.pages ?? [], [doc]);
   const currentPageIndex = pageId ? pages.findIndex((p) => p.id === pageId) : -1;
   const currentPage = currentPageIndex !== -1 ? pages[currentPageIndex] : null;
+  const searchResultIndex = pageId && searchContext
+    ? searchContext.results.findIndex((result) => result.pageId === pageId)
+    : -1;
+  const currentSearchResult = searchResultIndex >= 0
+    ? searchContext?.results[searchResultIndex]
+    : null;
 
   // Active rendering hook
   const { 
@@ -80,7 +102,7 @@ export const PageViewerDialog: React.FC<PageViewerDialogProps> = ({
 
   // Keyboard Shortcuts Handler
   useEffect(() => {
-    if (!isOpen || currentPageIndex === -1 || !doc) return;
+    if (!isOpen || suspendShortcuts || currentPageIndex === -1 || !doc) return;
 
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
       const activeEl = document.activeElement;
@@ -100,13 +122,13 @@ export const PageViewerDialog: React.FC<PageViewerDialogProps> = ({
         if (currentPageIndex > 0) {
           e.preventDefault();
           const prevPage = pages[currentPageIndex - 1];
-          onPageChange(prevPage.id, prevPage.documentId);
+          if (prevPage) onPageChange(prevPage.id, prevPage.documentId);
         }
       } else if (e.key === "ArrowRight") {
         if (currentPageIndex < pages.length - 1) {
           e.preventDefault();
           const nextPage = pages[currentPageIndex + 1];
-          onPageChange(nextPage.id, nextPage.documentId);
+          if (nextPage) onPageChange(nextPage.id, nextPage.documentId);
         }
       } else if (e.key === "+" || e.key === "=") {
         e.preventDefault();
@@ -129,7 +151,15 @@ export const PageViewerDialog: React.FC<PageViewerDialogProps> = ({
     return () => {
       window.removeEventListener("keydown", handleGlobalKeyDown);
     };
-  }, [isOpen, currentPageIndex, pages, doc, onClose, onPageChange]);
+  }, [
+    isOpen,
+    suspendShortcuts,
+    currentPageIndex,
+    pages,
+    doc,
+    onClose,
+    onPageChange,
+  ]);
 
   if (!isOpen || !currentPage || !doc) return null;
 
@@ -140,15 +170,21 @@ export const PageViewerDialog: React.FC<PageViewerDialogProps> = ({
   const handlePrevPage = () => {
     if (!isFirstPage) {
       const prevPage = pages[currentPageIndex - 1];
-      onPageChange(prevPage.id, prevPage.documentId);
+      if (prevPage) onPageChange(prevPage.id, prevPage.documentId);
     }
   };
 
   const handleNextPage = () => {
     if (!isLastPage) {
       const nextPage = pages[currentPageIndex + 1];
-      onPageChange(nextPage.id, nextPage.documentId);
+      if (nextPage) onPageChange(nextPage.id, nextPage.documentId);
     }
+  };
+
+  const navigateSearchResult = (direction: -1 | 1) => {
+    if (!searchContext || searchResultIndex < 0) return;
+    const target = searchContext.results[searchResultIndex + direction];
+    if (target) onPageChange(target.pageId, target.documentId);
   };
 
   const handleZoomIn = () => {
@@ -163,19 +199,19 @@ export const PageViewerDialog: React.FC<PageViewerDialogProps> = ({
 
   return (
     <div 
-      className="fixed inset-0 bg-[#07080af3] backdrop-blur-md z-50 flex items-center justify-center p-0 md:p-4 lg:p-6 animate-fade-in"
+      className="studio-dialog-overlay fixed inset-0 z-50 flex items-center justify-center p-0 md:p-4 lg:p-6 animate-fade-in"
       role="dialog"
       aria-modal="true"
       aria-label={`PDF Viewer - ${doc.name}`}
-      ref={containerRef as any}
+      ref={containerRef}
     >
       {/* Centered Modal Card Container */}
-      <div className="relative bg-[#0b0d13] border border-white/10 md:rounded-2xl shadow-2xl w-full h-full flex flex-col overflow-hidden max-w-full max-h-full md:max-w-[95vw] md:max-h-[94vh] rounded-none border-none">
+      <div className="command-surface relative flex h-full max-h-full w-full max-w-full flex-col overflow-hidden rounded-none border-none md:max-h-[94vh] md:max-w-[95vw] md:rounded-[18px] md:border">
         
         {/* ========================================== */}
         {/* TOP TOOLBAR                                */}
         {/* ========================================== */}
-        <header className="flex items-center justify-between px-4 py-3 bg-[#0e111a] border-b border-white/5 select-none shrink-0">
+        <header className="flex shrink-0 select-none items-center justify-between border-b studio-divider bg-panel-bg px-4 py-3">
           
           {/* Filename & Current Page Indicator */}
           <div className="flex flex-col md:flex-row md:items-center gap-1 md:gap-3 min-w-0">
@@ -217,6 +253,26 @@ export const PageViewerDialog: React.FC<PageViewerDialogProps> = ({
             <div className="w-px h-4 bg-white/10 mx-1" />
 
             <button
+              type="button"
+              onClick={onRotateLeft}
+              title="Rotate page left"
+              aria-label="Rotate viewed page left"
+              className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-muted-text hover:text-blue-bright border border-white/5 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-bright"
+            >
+              <RotateCcw className="w-4 h-4" aria-hidden="true" />
+            </button>
+
+            <button
+              type="button"
+              onClick={onRotateRight}
+              title="Rotate page right"
+              aria-label="Rotate viewed page right"
+              className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-muted-text hover:text-blue-bright border border-white/5 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-bright"
+            >
+              <RotateCw className="w-4 h-4" aria-hidden="true" />
+            </button>
+
+            <button
               onClick={() => setZoomMode("fit-page")}
               title="Fit entire page to screen (0)"
               aria-label="Fit Page"
@@ -243,6 +299,16 @@ export const PageViewerDialog: React.FC<PageViewerDialogProps> = ({
               <StretchHorizontal className="w-3.5 h-3.5 inline mr-1" />
               Width
             </button>
+
+            <button
+              type="button"
+              onClick={onDelete}
+              title="Delete viewed page"
+              aria-label="Delete viewed page"
+              className="p-1.5 rounded-lg bg-red-500/5 hover:bg-red-500/15 text-red-400 border border-red-500/15 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400"
+            >
+              <Trash2 className="w-4 h-4" aria-hidden="true" />
+            </button>
           </div>
 
           {/* Close Action Trigger */}
@@ -256,12 +322,33 @@ export const PageViewerDialog: React.FC<PageViewerDialogProps> = ({
           </button>
         </header>
 
+        {searchContext && currentSearchResult && (
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-cyan-300/10 bg-cyan-300/[0.035] px-4 py-2.5" role="status">
+            <div className="min-w-0">
+              <p className="truncate text-[10.5px] font-extrabold text-cyan-100">
+                Search result: “{searchContext.query}”
+              </p>
+              <p className="mt-0.5 text-[9.5px] text-muted-text">
+                {currentSearchResult.matchCount} {currentSearchResult.matchCount === 1 ? "match" : "matches"} on this page · Result {searchResultIndex + 1} of {searchContext.results.length}
+              </p>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <button type="button" onClick={() => navigateSearchResult(-1)} disabled={searchResultIndex <= 0} className="min-h-9 rounded-lg border border-white/10 px-2.5 text-[10px] font-bold text-secondary-text hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-bright">
+                Previous result
+              </button>
+              <button type="button" onClick={() => navigateSearchResult(1)} disabled={searchResultIndex >= searchContext.results.length - 1} className="min-h-9 rounded-lg border border-white/10 px-2.5 text-[10px] font-bold text-secondary-text hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-bright">
+                Next result
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* ========================================== */}
         {/* CANVAS PREVIEW / STAGE AREA                */}
         {/* ========================================== */}
         <div 
-          ref={canvasContainerRef as any}
-          className="flex-grow w-full overflow-auto bg-[#07080a] relative flex items-start justify-center p-4 scrollbar-thin outline-none"
+          ref={canvasContainerRef}
+          className="relative flex w-full flex-grow items-start justify-center overflow-auto bg-main-bg p-4 scrollbar-thin outline-none"
           tabIndex={0}
           aria-label="Page rendering canvas viewport"
         >
@@ -289,7 +376,7 @@ export const PageViewerDialog: React.FC<PageViewerDialogProps> = ({
           {/* Error Overlay */}
           {error && (
             <div className="absolute inset-0 bg-[#07080a]/95 flex items-center justify-center p-6 z-10 animate-fade-in">
-              <div className="bg-[#0b0d13] border border-red-500/20 rounded-2xl p-6 max-w-sm w-full text-center flex flex-col items-center gap-4 shadow-2xl">
+              <div className="flex w-full max-w-sm flex-col items-center gap-4 rounded-2xl border border-red-500/20 bg-panel-elevated p-6 text-center shadow-dialog">
                 <AlertCircle className="w-10 h-10 text-red-500" />
                 <div>
                   <h4 className="text-[14px] font-extrabold text-red-400">Unable to display page</h4>
@@ -323,7 +410,7 @@ export const PageViewerDialog: React.FC<PageViewerDialogProps> = ({
         {/* MOBILE CONTROLS DRAWER / EXPANDED FOOTER   */}
         {/* ========================================== */}
         {/* Shown only on smaller devices for mobile zoom */}
-        <div className="flex sm:hidden flex-wrap items-center justify-center gap-2 py-2 px-4 bg-[#0e111a] border-t border-b border-white/5 select-none shrink-0">
+        <div className="flex shrink-0 select-none flex-wrap items-center justify-center gap-2 border-y studio-divider bg-panel-bg px-4 py-2 sm:hidden">
           <button
             onClick={handleZoomOut}
             disabled={zoomMode === "custom" && zoom <= 50}
@@ -365,12 +452,39 @@ export const PageViewerDialog: React.FC<PageViewerDialogProps> = ({
           >
             Fit Width
           </button>
+
+          <button
+            type="button"
+            onClick={onRotateLeft}
+            aria-label="Rotate viewed page left"
+            className="w-9 h-9 rounded-lg bg-white/5 hover:bg-white/10 text-muted-text border border-white/5 flex items-center justify-center cursor-pointer"
+          >
+            <RotateCcw className="w-4 h-4" aria-hidden="true" />
+          </button>
+
+          <button
+            type="button"
+            onClick={onRotateRight}
+            aria-label="Rotate viewed page right"
+            className="w-9 h-9 rounded-lg bg-white/5 hover:bg-white/10 text-muted-text border border-white/5 flex items-center justify-center cursor-pointer"
+          >
+            <RotateCw className="w-4 h-4" aria-hidden="true" />
+          </button>
+
+          <button
+            type="button"
+            onClick={onDelete}
+            aria-label="Delete viewed page"
+            className="w-9 h-9 rounded-lg bg-red-500/5 hover:bg-red-500/15 text-red-400 border border-red-500/15 flex items-center justify-center cursor-pointer"
+          >
+            <Trash2 className="w-4 h-4" aria-hidden="true" />
+          </button>
         </div>
 
         {/* ========================================== */}
         {/* BOTTOM NAVIGATION BAR                      */}
         {/* ========================================== */}
-        <footer className="flex items-center justify-between px-4 py-3 bg-[#0e111a] border-t border-white/5 select-none shrink-0">
+        <footer className="flex shrink-0 select-none items-center justify-between border-t studio-divider bg-panel-bg px-4 py-3">
           
           {/* Previous Page Trigger */}
           <button

@@ -1,361 +1,504 @@
 import React from "react";
-import { Info, FileText, Layout, RefreshCw, Zap, ShieldAlert, CheckCircle2, Loader2, Eye, Move } from "lucide-react";
+import {
+  AnimatePresence,
+  motion,
+  useReducedMotion,
+} from "motion/react";
+import {
+  CheckCircle2,
+  Eye,
+  FileText,
+  Files,
+  Layout,
+  ListChecks,
+  Loader2,
+  RefreshCw,
+  RotateCw,
+  ShieldAlert,
+  X,
+  Zap,
+} from "lucide-react";
 import {
   WorkspaceDocument,
+  WorkspacePage,
+  WorkspaceSelectionState,
   WorkspaceSourceDocuments,
 } from "../../types/workspace";
-import { useToast } from "../ui/Toast";
+import {
+  PageOperationActionHandlers,
+  PageOperationActions,
+} from "./PageOperationActions";
+import {
+  motionDurations,
+  motionEasings,
+  reducedMotionTransition,
+} from "../../lib/motion/motionSystem";
 
 type InspectorProps = {
   documents: WorkspaceDocument[];
   sourceDocuments: WorkspaceSourceDocuments;
   selectedDocumentId: string | null;
-  selectedPageId: string | null;
+  selection: WorkspaceSelectionState;
+  selectedPages: WorkspacePage[];
+  onClearSelection: () => void;
+  onSelectAllInContainer: (containerId: string) => void;
   onOpenPageViewer?: (pageId: string, documentId: string) => void;
-  onMovePage?: (pageId: string, sourceContainerId: string, targetContainerId: string, targetIndex: number) => void;
+  operationHandlers: PageOperationActionHandlers;
 };
 
-// Formats file sizes into human-readable labels
+type InspectorMetricRowProps = {
+  label: string;
+  children: React.ReactNode;
+};
+
+const InspectorMetricRow: React.FC<InspectorMetricRowProps> = ({
+  label,
+  children,
+}) => (
+  <div className="inspector-property-row">
+    <span>{label}</span>
+    <strong>{children}</strong>
+  </div>
+);
+
 function formatBytes(bytes: number, decimals = 1) {
   if (bytes === 0) return "0 Bytes";
   const k = 1024;
   const dm = decimals < 0 ? 0 : decimals;
   const sizes = ["Bytes", "KB", "MB", "GB"];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + " " + sizes[i];
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
 }
 
 export const WorkspaceInspector: React.FC<InspectorProps> = ({
   documents = [],
   sourceDocuments,
   selectedDocumentId = null,
-  selectedPageId = null,
+  selection,
+  selectedPages,
+  onClearSelection,
+  onSelectAllInContainer,
   onOpenPageViewer,
-  onMovePage,
+  operationHandlers,
 }) => {
-  const { showToast } = useToast();
+  const reduceMotion = useReducedMotion();
   const totalDocuments = documents.length;
-  const totalPages = documents.reduce((sum, doc) => sum + (doc.pageCount || 0), 0);
-
-  // Derive selection counts
-  const selectedCount = selectedPageId ? 1 : 0;
-
-  // Calculate reorderedCount dynamically
-  const reorderedCount = documents.reduce((sum, doc) => {
-    return sum + doc.pages.reduce((pSum, page, idx) => {
-      const isReordered = page.documentId !== page.sourceDocumentId || idx !== page.originalPageIndex;
-      return pSum + (isReordered ? 1 : 0);
-    }, 0);
-  }, 0);
-
-  // Look up selected page if one is selected
-  const selectedPage = selectedPageId
-    ? documents.flatMap((doc) => doc.pages).find((p) => p.id === selectedPageId)
-    : null;
-
+  const totalPages = documents.reduce(
+    (sum, document) => sum + (document.pageCount || 0),
+    0
+  );
+  const selectedCount = selectedPages.length;
+  const reorderedCount = documents.reduce(
+    (sum, document) =>
+      sum +
+      document.pages.filter(
+        (page, index) =>
+          page.documentId !== page.sourceDocumentId ||
+          index !== page.originalPageIndex
+      ).length,
+    0
+  );
+  const rotatedCount = documents.reduce(
+    (sum, document) =>
+      sum + document.pages.filter((page) => page.rotation !== 0).length,
+    0
+  );
+  const duplicatedCount = documents.reduce(
+    (sum, document) =>
+      sum +
+      document.pages.filter((page) => Boolean(page.duplicatedFromPageId)).length,
+    0
+  );
+  const selectedPage = selectedCount === 1 ? selectedPages[0] : null;
   const parentDoc = selectedPage
-    ? documents.find((doc) => doc.id === selectedPage.documentId)
+    ? documents.find((document) => document.id === selectedPage.documentId) ??
+      null
     : null;
-
   const sourceDoc = selectedPage
     ? sourceDocuments[selectedPage.sourceDocumentId]
     : null;
-
-  // Look up selected document properties if one is selected (as fallback)
   const selectedDoc = selectedDocumentId
-    ? documents.find((doc) => doc.id === selectedDocumentId)
+    ? documents.find((document) => document.id === selectedDocumentId) ?? null
     : null;
+  const activeDocument = selection.activeContainerId
+    ? documents.find(
+        (document) => document.id === selection.activeContainerId
+      ) ?? null
+    : null;
+  const activePage = selection.activePageId
+    ? documents
+        .flatMap((document) => document.pages)
+        .find((page) => page.id === selection.activePageId) ?? null
+    : null;
+  const selectedCountsByDocument = documents
+    .map((document) => ({
+      document,
+      count: selectedPages.filter(
+        (page) => page.documentId === document.id
+      ).length,
+    }))
+    .filter(({ count }) => count > 0);
+  const duplicatedFromPage = selectedPage?.duplicatedFromPageId
+    ? documents
+        .flatMap((document) => document.pages)
+        .find((page) => page.id === selectedPage.duplicatedFromPageId)
+    : null;
+  const isSelectedPageLandscape =
+    selectedPage?.rotation === 90 || selectedPage?.rotation === 270;
+  const inspectorStateKey =
+    selectedCount > 1
+      ? `multi:${selectedCount}:${activePage?.id ?? "none"}`
+      : selectedPage && parentDoc
+        ? `page:${selectedPage.id}`
+        : selectedDoc
+          ? `document:${selectedDoc.id}`
+          : "empty";
+  const stateMotion = reduceMotion
+    ? reducedMotionTransition
+    : {
+        duration: motionDurations.quick,
+        ease: motionEasings.enter,
+      };
 
   return (
-    <aside 
-      className="w-full h-full bg-panel-bg flex flex-col select-none border-l border-border-main"
+    <aside
+      className="flex h-full w-full select-none flex-col border-l studio-divider bg-panel-bg"
       aria-label="Workspace Inspector"
     >
-      {/* Inspector Header */}
-      <div className="px-4 py-3.5 border-b border-white/5 bg-panel-elevated/20">
-        <h2 className="text-[13.5px] font-bold text-primary-text tracking-wide">Inspector</h2>
+      <div className="border-b studio-divider bg-panel-elevated/20 px-4 py-4">
+        <h2 className="text-[13.5px] font-semibold tracking-[-0.02em] text-primary-text">
+          Inspector
+        </h2>
       </div>
 
-      {/* Main Panel Content Scroll Area */}
-      <div className="flex-grow overflow-y-auto p-4 flex flex-col gap-5 min-h-0">
-        
-        {/* Selection/Properties Section */}
-        <div className="flex flex-col gap-2">
-          <h3 className="text-[11.5px] font-bold text-secondary-text uppercase tracking-wider px-1">
-            Properties
+      <div className="flex min-h-0 flex-grow flex-col gap-6 overflow-y-auto p-4">
+        <section className="flex flex-col gap-3" aria-labelledby="inspector-selection-heading">
+          <h3
+            id="inspector-selection-heading"
+            className="px-0.5 text-xs font-semibold text-secondary-text"
+          >
+            Selection
           </h3>
 
-          {selectedPage && parentDoc ? (
-            /* Selected Page Properties State */
-            <div className="bg-panel-elevated/40 border border-white/5 rounded-xl p-3.5 flex flex-col gap-3.5">
-              
-              {/* Heading */}
-              <div className="flex items-center justify-between">
-                <span className="text-[11.5px] font-extrabold text-blue-bright uppercase tracking-wider">
-                  Selected Page
-                </span>
-                <span className="text-[10.5px] bg-blue-bright/10 text-blue-bright px-2 py-0.5 rounded-full font-bold">
-                  P. {selectedPage.pageNumber}
-                </span>
-              </div>
-
-              {/* Compact Preview Area */}
-              <div className="w-full aspect-[1/1.2] rounded-lg bg-panel-bg/60 border border-white/5 overflow-hidden flex items-center justify-center relative shadow-inner">
-                {selectedPage.thumbnailStatus === "ready" && selectedPage.thumbnailUrl ? (
-                  <img
-                    src={selectedPage.thumbnailUrl}
-                    alt={`Selected page ${selectedPage.pageNumber} preview`}
-                    referrerPolicy="no-referrer"
-                    className="w-full h-full object-contain p-2"
-                  />
-                ) : selectedPage.thumbnailStatus === "rendering" ? (
-                  <div className="flex flex-col items-center gap-1.5 text-muted-text/60">
-                    <Loader2 className="w-5 h-5 animate-spin text-blue-bright" />
-                    <span className="text-[9px] font-bold uppercase tracking-wider">Rendering preview</span>
-                  </div>
-                ) : selectedPage.thumbnailStatus === "error" ? (
-                  <div className="flex flex-col items-center p-3 text-center gap-1 text-red-400">
-                    <ShieldAlert className="w-5 h-5" />
-                    <span className="text-[9px] font-bold uppercase tracking-wider">Preview failed</span>
-                  </div>
-                ) : (
-                  <div className="text-[9px] font-bold text-muted-text/30 uppercase tracking-wider">
-                    Queueing
-                  </div>
-                )}
-              </div>
-
-              {/* Read-Only Meta Information */}
-              <div className="flex flex-col gap-2 text-[12px] border-t border-white/5 pt-2">
-                <div className="flex items-start justify-between gap-4">
-                  <span className="text-muted-text flex-shrink-0">Source Document</span>
-                  <span className="font-bold text-secondary-text truncate text-right max-w-[150px]" title={sourceDoc?.name || parentDoc.name}>
-                    {sourceDoc?.name || parentDoc.name}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-text">Current Group</span>
-                  <span className="font-bold text-secondary-text truncate text-right max-w-[150px]" title={parentDoc.name}>
-                    {parentDoc.name}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-text">Current Position</span>
-                  <span className="font-bold text-secondary-text font-mono">
-                    {selectedPage.pageNumber}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-text">Original Page</span>
-                  <span className="font-bold text-secondary-text font-mono">
-                    {selectedPage.originalPageIndex + 1}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-text">Rotation</span>
-                  <span className="font-bold text-secondary-text">{selectedPage.rotation}°</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-text">Render Status</span>
-                  <span className="font-bold flex items-center gap-1">
-                    {selectedPage.thumbnailStatus === "ready" ? (
-                      <span className="text-green-400 flex items-center gap-1">
-                        <CheckCircle2 className="w-3.5 h-3.5" /> Ready
-                      </span>
-                    ) : selectedPage.thumbnailStatus === "rendering" ? (
-                      <span className="text-blue-bright flex items-center gap-1">
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" /> Rendering...
-                      </span>
-                    ) : (
-                      <span className="text-muted-text flex items-center gap-1">
-                        Queueing
-                      </span>
-                    )}
-                  </span>
-                </div>
-              </div>
-
-              {/* Keyboard Accessible Move To Control */}
-              <div className="flex flex-col gap-1.5 border-t border-white/5 pt-3">
-                <label 
-                  htmlFor="inspector-move-to-select" 
-                  className="text-[10.5px] font-extrabold text-muted-text uppercase tracking-wider"
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.div
+              key={inspectorStateKey}
+              initial={reduceMotion ? false : { opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={
+                reduceMotion
+                  ? { opacity: 1, y: 0 }
+                  : { opacity: 0, y: -3 }
+              }
+              transition={stateMotion}
+            >
+              {selectedCount > 1 ? (
+                <div
+                  className="inspector-selection-surface"
+                  data-inspector-state="multi-selection"
                 >
-                  Move page to...
-                </label>
-                <select
-                  id="inspector-move-to-select"
-                  value={parentDoc.id}
-                  onChange={(e) => {
-                    const targetDocId = e.target.value;
-                    if (targetDocId !== parentDoc.id) {
-                      const targetDoc = documents.find((d) => d.id === targetDocId);
-                      if (targetDoc) {
-                        onMovePage?.(selectedPage.id, parentDoc.id, targetDocId, targetDoc.pages.length);
-                        // Show a silent toast notification on completion
-                        showToast("Page moved", `Page moved to ${targetDoc.name}`, "info");
-                      }
+                  <div className="flex items-start gap-3">
+                    <span className="spatial-mark h-9 w-9">
+                      <ListChecks className="h-4 w-4" aria-hidden="true" />
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-[13px] font-semibold text-primary-text">
+                        {selectedCount} pages selected
+                      </p>
+                      <p className="mt-0.5 text-[11px] text-muted-text">
+                        Across {selectedCountsByDocument.length}{" "}
+                        {selectedCountsByDocument.length === 1
+                          ? "document"
+                          : "documents"}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="inspector-selection-breakdown">
+                    {selectedCountsByDocument.map(({ document, count }) => (
+                      <div key={document.id}>
+                        <span title={document.name}>{document.name}</span>
+                        <strong>
+                          {count} {count === 1 ? "page" : "pages"}
+                        </strong>
+                      </div>
+                    ))}
+                  </div>
+
+                  {activePage && (
+                    <div className="inspector-active-page">
+                      <span>Active page</span>
+                      <strong className="studio-number">
+                        {String(activePage.pageNumber).padStart(2, "0")}
+                      </strong>
+                    </div>
+                  )}
+
+                  <div className="inspector-command-stack">
+                    <PageOperationActions
+                      {...operationHandlers}
+                      onClearSelection={onClearSelection}
+                      selectedCount={selectedCount}
+                      variant="inspector"
+                    />
+                  </div>
+                </div>
+              ) : selectedPage && parentDoc ? (
+                <div
+                  className="inspector-selection-surface"
+                  data-inspector-state="single-page"
+                >
+                  <div
+                    className={`inspector-page-preview ${
+                      isSelectedPageLandscape ? "is-landscape" : ""
+                    }`}
+                  >
+                    <div
+                      className={`paper-plane inspector-preview-paper ${
+                        isSelectedPageLandscape
+                          ? "aspect-[1.41/1]"
+                          : "aspect-[1/1.41]"
+                      }`}
+                    >
+                      {selectedPage.thumbnailStatus === "ready" &&
+                      selectedPage.thumbnailUrl ? (
+                        <img
+                          src={selectedPage.thumbnailUrl}
+                          alt={`Selected page ${selectedPage.pageNumber} preview`}
+                          referrerPolicy="no-referrer"
+                          className="h-full w-full object-contain"
+                        />
+                      ) : selectedPage.thumbnailStatus === "error" ? (
+                        <div className="flex h-full flex-col items-center justify-center gap-2 p-3 text-center text-red-400">
+                          <ShieldAlert className="h-5 w-5" aria-hidden="true" />
+                          <span className="text-[10px] font-semibold">
+                            Preview unavailable
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="paper-skeleton" aria-hidden="true">
+                          <span className="paper-skeleton-rule paper-skeleton-rule-strong" />
+                          <span className="paper-skeleton-rule" />
+                          <span className="paper-skeleton-rule" />
+                          <span className="paper-skeleton-rule paper-skeleton-rule-short" />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="inspector-page-identity">
+                    <p className="studio-number">
+                      Page {String(selectedPage.pageNumber).padStart(2, "0")}
+                    </p>
+                    <strong>{parentDoc.name}</strong>
+                    <span>
+                      <bdi dir="auto">{sourceDoc?.name || parentDoc.name}</bdi>
+                      {" · "}Original page{" "}
+                      {String(selectedPage.originalPageIndex + 1).padStart(
+                        2,
+                        "0"
+                      )}
+                    </span>
+                  </div>
+
+                  <div className="inspector-property-list">
+                    <InspectorMetricRow label="Current position">
+                      <span className="studio-number">
+                        {selectedPage.pageNumber}
+                      </span>
+                    </InspectorMetricRow>
+                    <InspectorMetricRow label="Rotation">
+                      {selectedPage.rotation}°
+                    </InspectorMetricRow>
+                    <InspectorMetricRow label="Duplicate">
+                      {selectedPage.duplicatedFromPageId
+                        ? duplicatedFromPage
+                          ? `From page ${duplicatedFromPage.pageNumber}`
+                          : "Yes"
+                        : "No"}
+                    </InspectorMetricRow>
+                    <InspectorMetricRow label="Preview">
+                      {selectedPage.thumbnailStatus === "ready" ? (
+                        <span className="inline-flex items-center gap-1 text-success-green">
+                          <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
+                          Ready
+                        </span>
+                      ) : selectedPage.thumbnailStatus === "error" ? (
+                        <span className="inline-flex items-center gap-1 text-red-400">
+                          <ShieldAlert className="h-3.5 w-3.5" aria-hidden="true" />
+                          Unavailable
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-blue-bright">
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                          Preparing
+                        </span>
+                      )}
+                    </InspectorMetricRow>
+                  </div>
+
+                  <div className="inspector-command-stack">
+                    <PageOperationActions
+                      {...operationHandlers}
+                      selectedCount={selectedCount}
+                      variant="inspector"
+                    />
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onOpenPageViewer?.(
+                        selectedPage.id,
+                        selectedPage.documentId
+                      )
                     }
-                  }}
-                  className="w-full bg-[#121620] hover:bg-[#161b29] border border-white/10 rounded-xl px-3 py-2 text-[12px] text-primary-text font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-bright transition-all cursor-pointer"
+                    className="studio-interactive flex min-h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-[9px] border border-blue-bright/28 bg-blue-accent/[0.14] px-3 py-2 text-[12px] font-semibold text-blue-bright hover:bg-blue-accent/[0.22] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-bright"
+                  >
+                    <Eye className="h-4 w-4" aria-hidden="true" />
+                    Open Page
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={onClearSelection}
+                    className="studio-interactive flex min-h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-[9px] border border-transparent px-3 py-2 text-[11.5px] font-semibold text-muted-text hover:bg-white/5 hover:text-secondary-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-bright"
+                  >
+                    <X className="h-3.5 w-3.5" aria-hidden="true" />
+                    Clear selection
+                  </button>
+                </div>
+              ) : selectedDoc ? (
+                <div
+                  className="inspector-selection-surface"
+                  data-inspector-state="document"
                 >
-                  {documents.map((doc) => (
-                    <option key={doc.id} value={doc.id} disabled={doc.status !== "ready"}>
-                      {doc.name} {doc.id === parentDoc.id ? "(Current)" : ""}
-                    </option>
-                  ))}
-                </select>
-              </div>
+                  <div className="flex items-start gap-3">
+                    <span
+                      className="mt-0.5 h-9 w-0.5 flex-shrink-0 rounded-sm"
+                      style={{ backgroundColor: selectedDoc.color }}
+                      aria-hidden="true"
+                    />
+                    <div className="min-w-0 flex-grow">
+                      <p
+                        className="truncate text-[13px] font-semibold text-primary-text"
+                        title={selectedDoc.name}
+                      >
+                        {selectedDoc.name}
+                      </p>
+                      <p className="mt-0.5 text-[11px] text-muted-text">
+                        Current document
+                      </p>
+                    </div>
+                  </div>
 
-              {/* Action Button to Open Full-Page Viewer */}
-              <button
-                type="button"
-                onClick={() => onOpenPageViewer?.(selectedPage.id, selectedPage.documentId)}
-                className="w-full mt-1.5 py-2 px-3 rounded-xl bg-blue-bright hover:bg-blue-bright/90 text-[#07080a] text-[12.5px] font-extrabold transition-all shadow-md cursor-pointer flex items-center justify-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-panel-bg focus-visible:ring-blue-bright"
-              >
-                <Eye className="w-4 h-4" />
-                Open Page
-              </button>
+                  <div className="inspector-property-list">
+                    <InspectorMetricRow label="Source size">
+                      {formatBytes(selectedDoc.size)}
+                    </InspectorMetricRow>
+                    <InspectorMetricRow label="Pages">
+                      {selectedDoc.pageCount}
+                    </InspectorMetricRow>
+                    <InspectorMetricRow label="Import">
+                      {selectedDoc.status === "ready" ? (
+                        <span className="inline-flex items-center gap-1 text-success-green">
+                          <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
+                          Ready
+                        </span>
+                      ) : selectedDoc.status === "loading" ? (
+                        <span className="inline-flex items-center gap-1 text-blue-bright">
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                          Reading
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-red-400">
+                          <ShieldAlert className="h-3.5 w-3.5" aria-hidden="true" />
+                          Error
+                        </span>
+                      )}
+                    </InspectorMetricRow>
+                  </div>
 
-            </div>
-          ) : selectedDoc ? (
-            /* Selected Document properties (as fallback when no page is selected) */
-            <div className="bg-panel-elevated/40 border border-white/5 rounded-xl p-3.5 flex flex-col gap-3">
-              {/* Document Header details */}
-              <div className="flex items-start gap-2.5 min-w-0">
-                <div 
-                  className="w-2.5 h-2.5 rounded-full mt-1.5 flex-shrink-0" 
-                  style={{ backgroundColor: selectedDoc.color }} 
-                />
-                <div className="min-w-0 flex-grow">
-                  <p className="text-[12.5px] font-extrabold text-primary-text truncate" title={selectedDoc.name}>
-                    {selectedDoc.name}
+                  {selectedDoc.status === "error" &&
+                    selectedDoc.errorMessage && (
+                      <p className="rounded-[8px] border border-red-500/10 bg-red-500/5 p-2 text-[11px] font-medium text-red-400">
+                        {selectedDoc.errorMessage}
+                      </p>
+                    )}
+                </div>
+              ) : (
+                <div
+                  className="inspector-empty-selection"
+                  data-inspector-state="empty"
+                >
+                  <strong>Nothing selected</strong>
+                  <p>
+                    Select a page or document to inspect its identity and
+                    editing controls.
                   </p>
-                  <p className="text-[10px] text-muted-text mt-0.5">Active selection</p>
-                </div>
-              </div>
-
-              <div className="w-full h-px bg-white/5" />
-
-              {/* Document specific details */}
-              <div className="flex flex-col gap-2 text-[12px]">
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-text">File Size</span>
-                  <span className="font-bold text-secondary-text">{formatBytes(selectedDoc.size)}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-text">Page Count</span>
-                  <span className="font-bold text-secondary-text">{selectedDoc.pageCount} pages</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-text">Import Status</span>
-                  <span className="font-bold flex items-center gap-1">
-                    {selectedDoc.status === "ready" && (
-                      <span className="text-green-400 flex items-center gap-1">
-                        <CheckCircle2 className="w-3.5 h-3.5" /> Ready
-                      </span>
-                    )}
-                    {selectedDoc.status === "loading" && (
-                      <span className="text-blue-bright flex items-center gap-1">
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" /> Reading...
-                      </span>
-                    )}
-                    {selectedDoc.status === "error" && (
-                      <span className="text-red-400 flex items-center gap-1" title={selectedDoc.errorMessage}>
-                        <ShieldAlert className="w-3.5 h-3.5" /> Error
-                      </span>
-                    )}
-                  </span>
-                </div>
-              </div>
-
-              {selectedDoc.status === "error" && selectedDoc.errorMessage && (
-                <div className="p-2 rounded-lg bg-red-500/5 border border-red-500/10 text-[11px] text-red-400 font-medium">
-                  {selectedDoc.errorMessage}
                 </div>
               )}
-            </div>
-          ) : (
-            /* Zero Selection Indicator State */
-            <div className="p-3.5 rounded-xl border border-dashed border-white/10 bg-white/5/20 text-center flex flex-col items-center justify-center py-6">
-              <span className="text-[11px] font-bold text-secondary-text uppercase tracking-wider mb-1">
-                Nothing selected
-              </span>
-              <p className="text-[11px] text-muted-text leading-relaxed max-w-[200px]">
-                Select a page or a document row to inspect detailed properties here.
-              </p>
-            </div>
-          )}
-        </div>
+            </motion.div>
+          </AnimatePresence>
 
-        {/* Project Summary Section */}
-        <div className="flex flex-col gap-2">
-          <h3 className="text-[11.5px] font-bold text-secondary-text uppercase tracking-wider px-1">
-            Workspace Summary
+          {activeDocument?.status === "ready" &&
+            activeDocument.pages.length > 0 && (
+              <button
+                type="button"
+                onClick={() => onSelectAllInContainer(activeDocument.id)}
+                className="studio-interactive min-h-11 w-full cursor-pointer rounded-[9px] border border-blue-bright/14 bg-blue-bright/[0.035] px-3 py-2 text-[11.5px] font-semibold text-blue-bright hover:border-blue-bright/28 hover:bg-blue-bright/[0.075] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-bright"
+              >
+                Select all pages in this document
+              </button>
+            )}
+        </section>
+
+        <section className="flex flex-col gap-3" aria-labelledby="workspace-summary-heading">
+          <h3
+            id="workspace-summary-heading"
+            className="px-0.5 text-xs font-semibold text-secondary-text"
+          >
+            Workspace summary
           </h3>
-          
-          <div className="bg-panel-elevated/40 border border-white/5 rounded-xl p-3 flex flex-col gap-2.5">
-            <div className="flex items-center justify-between text-[12px]">
-              <span className="text-muted-text flex items-center gap-1.5">
-                <FileText className="w-3.5 h-3.5 text-muted-text/80" aria-hidden="true" />
-                Documents
+          <div className="inspector-summary-list">
+            <InspectorMetricRow label="Documents">
+              <span className="inline-flex items-center gap-1.5">
+                <FileText className="h-3.5 w-3.5 text-muted-text" aria-hidden="true" />
+                {totalDocuments}
               </span>
-              <span className="font-extrabold text-primary-text">{totalDocuments}</span>
-            </div>
-
-            <div className="flex items-center justify-between text-[12px]">
-              <span className="text-muted-text flex items-center gap-1.5">
-                <Layout className="w-3.5 h-3.5 text-muted-text/80" aria-hidden="true" />
-                Total Pages
+            </InspectorMetricRow>
+            <InspectorMetricRow label="Total pages">
+              <span className="inline-flex items-center gap-1.5">
+                <Layout className="h-3.5 w-3.5 text-muted-text" aria-hidden="true" />
+                {totalPages}
               </span>
-              <span className="font-extrabold text-primary-text">{totalPages}</span>
-            </div>
-
-            <div className="w-full h-px bg-white/5" />
-
-            <div className="flex items-center justify-between text-[12px]">
-              <span className="text-muted-text flex items-center gap-1.5">
-                <Zap className="w-3.5 h-3.5 text-muted-text/80" aria-hidden="true" />
-                Selected Pages
+            </InspectorMetricRow>
+            <InspectorMetricRow label="Selected">
+              <span className="inline-flex items-center gap-1.5">
+                <Zap className="h-3.5 w-3.5 text-muted-text" aria-hidden="true" />
+                {selectedCount}
               </span>
-              <span className="font-extrabold text-primary-text">{selectedCount}</span>
-            </div>
-
-            <div className="flex items-center justify-between text-[12px]">
-              <span className="text-muted-text flex items-center gap-1.5">
-                <RefreshCw className="w-3.5 h-3.5 text-muted-text/80" aria-hidden="true" />
-                Reordered Pages
+            </InspectorMetricRow>
+            <InspectorMetricRow label="Reordered">
+              <span className="inline-flex items-center gap-1.5">
+                <RefreshCw className="h-3.5 w-3.5 text-muted-text" aria-hidden="true" />
+                {reorderedCount}
               </span>
-              <span className="font-extrabold text-primary-text">{reorderedCount}</span>
-            </div>
+            </InspectorMetricRow>
+            <InspectorMetricRow label="Rotated">
+              <span className="inline-flex items-center gap-1.5">
+                <RotateCw className="h-3.5 w-3.5 text-muted-text" aria-hidden="true" />
+                {rotatedCount}
+              </span>
+            </InspectorMetricRow>
+            <InspectorMetricRow label="Duplicated">
+              <span className="inline-flex items-center gap-1.5">
+                <Files className="h-3.5 w-3.5 text-muted-text" aria-hidden="true" />
+                {duplicatedCount}
+              </span>
+            </InspectorMetricRow>
           </div>
-        </div>
-
-        {/* Smart Restore Information Card */}
-        <div className="flex flex-col gap-2">
-          <h3 className="text-[11.5px] font-bold text-secondary-text uppercase tracking-wider px-1">
-            Smart Restore
-          </h3>
-          
-          <div className="bg-blue-accent/5 border border-blue-bright/10 rounded-xl p-3.5 flex flex-col gap-2">
-            <div className="flex items-start gap-2 text-[11.5px] font-bold text-blue-bright">
-              <Info className="w-4 h-4 flex-shrink-0 mt-0.5" aria-hidden="true" />
-              <span>Smart Restore Info</span>
-            </div>
-            
-            <p className="text-[11px] text-muted-text leading-relaxed">
-              Smart Restore becomes available after a project is exported as a Smart PDF.
-            </p>
-
-            <div className="mt-1 px-2.5 py-1.5 rounded-lg bg-white/5 border border-white/5 flex items-center justify-between text-[10px]">
-              <span className="font-bold text-secondary-text">Status:</span>
-              <span className="font-extrabold text-muted-text uppercase tracking-wider">
-                Not available yet
-              </span>
-            </div>
-          </div>
-        </div>
-
+        </section>
       </div>
     </aside>
   );
