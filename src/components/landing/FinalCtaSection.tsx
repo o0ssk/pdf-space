@@ -18,17 +18,15 @@ export const FinalCtaSection: React.FC<FinalCtaSectionProps> = ({ copy }) => {
     <section className="final-cta-section">
       <motion.div
         className="landing-shell final-cta-inner"
-        initial={reduceMotion ? false : { opacity: 0.85, y: 12 }}
+        initial={reduceMotion ? false : { opacity: 0.78, y: 12 }}
         transition={{
           duration: landingMotion.duration.section,
           ease: landingMotion.ease.enter,
         }}
-        viewport={{ amount: 0.35, once: true }}
+        viewport={{ amount: 0.42, once: true }}
         whileInView={{ opacity: 1, y: 0 }}
       >
-        <span className="editorial-eyebrow">{copy.finalCta.eyebrow}</span>
         <h2>{copy.finalCta.title}</h2>
-        <p>{copy.finalCta.description}</p>
         <button
           className="landing-primary-button"
           onClick={() => {
@@ -39,7 +37,6 @@ export const FinalCtaSection: React.FC<FinalCtaSectionProps> = ({ copy }) => {
           {copy.finalCta.action}
           <ArrowUpRight aria-hidden="true" />
         </button>
-        <span className="final-cta-footnote">{copy.finalCta.footnote}</span>
       </motion.div>
     </section>
   );

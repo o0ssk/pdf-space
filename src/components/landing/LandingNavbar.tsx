@@ -27,7 +27,6 @@ export const LandingNavbar: React.FC<LandingNavbarProps> = ({
     { href: "#product-showcase", label: copy.navigation.product },
     { href: "#features", label: copy.navigation.features },
     { href: "#how-it-works", label: copy.navigation.howItWorks },
-    { href: "#architecture", label: copy.navigation.trust },
     { href: "#faq", label: copy.navigation.faq },
   ];
 
@@ -106,7 +105,7 @@ export const LandingNavbar: React.FC<LandingNavbarProps> = ({
           className="landing-navbar-logo"
           href="#home"
         >
-          <PdfSpaceLogo showName />
+          <PdfSpaceLogo />
         </a>
 
         <nav aria-label="Landing page" className="landing-navbar-links">

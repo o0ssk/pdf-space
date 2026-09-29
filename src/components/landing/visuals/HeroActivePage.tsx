@@ -16,60 +16,62 @@ export const HeroActivePage: React.FC<HeroActivePageProps> = ({
         <div className="hero-active-page-header-row">
           <span className="hero-active-page-kicker">
             <i className="hero-kicker-dot" aria-hidden="true" />
-            Executive Dossier
+            Quarterly report
           </span>
           <span className="hero-active-page-badge">Page {pageNum}</span>
         </div>
 
-        <h3>Quarterly Capital Allocation</h3>
-        <p>Portfolio liquidity, debt covenants, and fiscal horizon.</p>
+        <h3>Delivery overview</h3>
+        <p>Workstreams, review progress, and the next delivery window.</p>
 
         <svg
           aria-hidden="true"
           className="hero-active-page-chart"
-          viewBox="0 0 240 96"
+          viewBox="0 0 240 104"
         >
           <defs>
-            <linearGradient id="hero-paper-chart-area" x1="0" x2="0" y1="0" y2="1">
-              <stop offset="0%" stopColor="#1E293B" stopOpacity="0.12" />
-              <stop offset="100%" stopColor="#1E293B" stopOpacity="0.01" />
+            <linearGradient id="hero-report-area" x1="0" x2="0" y1="0" y2="1">
+              <stop offset="0%" stopColor="#3f79bb" stopOpacity="0.45" />
+              <stop offset="50%" stopColor="#1d4f8a" stopOpacity="0.18" />
+              <stop offset="100%" stopColor="#8c3a70" stopOpacity="0.02" />
             </linearGradient>
+            <filter id="chart-glow" x="-20%" y="-20%" width="140%" height="140%">
+              <feGaussianBlur stdDeviation="2" result="blur" />
+              <feComposite in="SourceGraphic" in2="blur" operator="over" />
+            </filter>
           </defs>
-          <path className="hero-chart-grid" d="M8 20H232M8 48H232M8 76H232" />
+          <path className="hero-chart-grid" d="M8 24H232M8 56H232M8 88H232" />
           <path
             className="hero-chart-area"
-            d="M9 74L48 62L86 66L125 36L164 42L204 18L232 24V88H9Z"
-            fill="url(#hero-paper-chart-area)"
+            d="M9 86L48 72L86 76L125 43L164 51L204 22L232 29V96H9Z"
           />
           <path
             className="hero-chart-line"
-            d="M9 74L48 62L86 66L125 36L164 42L204 18L232 24"
-            fill="none"
-            stroke="#1C1917"
-            strokeWidth="1.75"
-            strokeLinecap="round"
-            strokeLinejoin="round"
+            d="M9 86L48 72L86 76L125 43L164 51L204 22L232 29"
+            filter="url(#chart-glow)"
           />
-          <circle cx="125" cy="36" fill="#8C533A" r="3.5" />
-          <circle cx="204" cy="18" fill="#1C1917" r="3.5" />
+          <circle cx="125" cy="43" r="4.5" />
+          <circle cx="204" cy="22" r="5" />
         </svg>
 
         <div className="hero-active-page-summary">
           <div>
-            <span>Status</span>
-            <strong>Audited</strong>
+            <span>Workstreams</span>
+            <strong>In review</strong>
           </div>
           <div>
-            <span>Filing</span>
-            <strong>Q3 Standard</strong>
+            <span>Next window</span>
+            <strong>Final pass</strong>
           </div>
         </div>
 
         <footer>
-          <span>PDF Space Studio</span>
-          <span>Folio {pageNum}</span>
+          <span>PDF Space</span>
+          <span>{pageNum}</span>
         </footer>
       </div>
     </article>
   );
 };
+
+

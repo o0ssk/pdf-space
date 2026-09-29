@@ -33,13 +33,18 @@ export const HeroWorkspaceScene: React.FC<HeroWorkspaceSceneProps> = ({
       }`}
       data-hero-workspace-scene
     >
+      <div className="hero-scene-lighting">
+        <i />
+        <i />
+      </div>
+
       <div className="hero-workspace-topbar">
         <span className="hero-workspace-brand">
-          <FileStack className="w-4 h-4" />
-          PDF Space Studio
+          <FileStack />
+          PDF Space
         </span>
-        <span className="hero-workspace-mode-pill">Interactive Drafting Stage</span>
-        <span className="hero-workspace-project">100% In-Memory</span>
+        <span>Focused document flow</span>
+        <span className="hero-workspace-project">Local workspace</span>
       </div>
 
       <div className="hero-workspace-canvas">
@@ -69,17 +74,17 @@ export const HeroWorkspaceScene: React.FC<HeroWorkspaceSceneProps> = ({
         >
           <defs>
             <linearGradient id="hero-trajectory-gradient" x1="0" x2="1" y1="0" y2="0">
-              <stop offset="0%" stopColor="#1C1917" stopOpacity="0.06" />
-              <stop offset="50%" stopColor="#8C533A" stopOpacity="0.32" />
-              <stop offset="100%" stopColor="#1C1917" stopOpacity="0.08" />
+              <stop offset="0%" stopColor="#3f79bb" stopOpacity="0.15" />
+              <stop offset="50%" stopColor="#78a5d7" stopOpacity="0.65" />
+              <stop offset="100%" stopColor="#8c3a70" stopOpacity="0.2" />
             </linearGradient>
           </defs>
           <path
             d="M 290 140 C 450 60, 600 60, 780 180"
             fill="none"
             stroke="url(#hero-trajectory-gradient)"
-            strokeDasharray="4 6"
-            strokeWidth="1.75"
+            strokeDasharray="6 8"
+            strokeWidth="2.5"
           />
         </svg>
 

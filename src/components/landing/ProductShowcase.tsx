@@ -105,13 +105,11 @@ export const ProductShowcase: React.FC<ProductShowcaseProps> = ({ copy }) => {
   };
 
   return (
-    <section className="product-showcase-section" id="product-showcase">
-      <div className="landing-shell">
-        <div className="landing-section-header">
-          <span className="editorial-eyebrow">{copy.navigation.product}</span>
-          <h2 className="editorial-title">{copy.showcase.title}</h2>
-          <p className="editorial-lead">{copy.showcase.description}</p>
-        </div>
+    <section className="product-showcase" id="product-showcase">
+      <div className="landing-section-heading is-dark">
+        <h2>{copy.showcase.title}</h2>
+        <p>{copy.showcase.description}</p>
+      </div>
 
       <div
         className="product-showcase-demo"
@@ -171,7 +169,12 @@ export const ProductShowcase: React.FC<ProductShowcaseProps> = ({ copy }) => {
           </AnimatePresence>
         </div>
       </div>
-    </div>
-  </section>
-);
+
+      <div aria-hidden="true" className="warm-transition-layers">
+        <i />
+        <i />
+        <i />
+      </div>
+    </section>
+  );
 };
