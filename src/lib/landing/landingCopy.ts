@@ -1,11 +1,19 @@
 export type LandingLocale = "ar" | "en";
 
+export type FeatureItem = {
+  id: string;
+  title: string;
+  tag: string;
+  description: string;
+};
+
 export type LandingCopy = {
   navigation: {
     home: string;
     product: string;
     features: string;
     howItWorks: string;
+    trust: string;
     faq: string;
     login: string;
     openApp: string;
@@ -15,6 +23,7 @@ export type LandingCopy = {
     switchLanguage: string;
   };
   hero: {
+    badge: string;
     title: string;
     description: string;
     primaryAction: string;
@@ -29,6 +38,7 @@ export type LandingCopy = {
     destinationSlotLabel: string;
     sceneDescription: string;
     transferStatus: string;
+    tools: readonly string[];
   };
   showcase: {
     title: string;
@@ -37,22 +47,33 @@ export type LandingCopy = {
     documentNames: readonly [string, string];
   };
   features: {
+    eyebrow: string;
     title: string;
     description: string;
-    items: readonly {
-      title: string;
-      description: string;
+    items: readonly FeatureItem[];
+  };
+  trust: {
+    eyebrow: string;
+    title: string;
+    description: string;
+    metrics: readonly {
+      value: string;
+      label: string;
+      sublabel: string;
     }[];
   };
   howItWorks: {
+    eyebrow: string;
     title: string;
     description: string;
     steps: readonly {
+      number: string;
       title: string;
       description: string;
     }[];
   };
   faq: {
+    eyebrow: string;
     title: string;
     description: string;
     items: readonly {
@@ -61,8 +82,11 @@ export type LandingCopy = {
     }[];
   };
   finalCta: {
+    eyebrow: string;
     title: string;
+    description: string;
     action: string;
+    footnote: string;
   };
   footer: {
     description: string;
@@ -81,321 +105,467 @@ export type LandingCopy = {
   };
 };
 
-export const landingCopy = {
+export const landingCopy: Record<LandingLocale, LandingCopy> = {
   en: {
     navigation: {
-      home: "Home",
-      product: "Product",
-      features: "Features",
-      howItWorks: "How It Works",
+      home: "Overview",
+      product: "Studio",
+      features: "Capabilities",
+      howItWorks: "Process",
+      trust: "Architecture",
       faq: "FAQ",
-      login: "Login",
-      openApp: "Open App",
+      login: "Sign In",
+      openApp: "Open Studio",
       openMenu: "Open navigation",
       closeMenu: "Close navigation",
       dismissMenu: "Dismiss navigation",
-      switchLanguage: "Switch to Arabic",
+      switchLanguage: "العربية",
     },
     hero: {
-      title: "A smarter space for every PDF.",
+      badge: "Local-First Architecture • Zero Cloud Uploads • End-to-End Privacy",
+      title: "Quiet power for your PDF documents.",
       description:
-        "Organize pages across documents, keep every source clear, and export standard PDF files locally.",
-      primaryAction: "Open PDF Space",
-      secondaryAction: "Explore the Workspace",
-      sourceName: "Report 01",
+        "An elegant, tactile workspace to merge, split, reorganize, compress, and inspect PDF files with millimeter precision. All processed in-memory directly within your browser.",
+      primaryAction: "Open Workspace",
+      secondaryAction: "Explore Capabilities",
+      sourceName: "Financial Report 2026.pdf",
       sourceMeta: "4 source pages",
-      destinationName: "Plans 02",
-      destinationMeta: "Open destination",
-      sourceRole: "Source document",
-      destinationRole: "Destination document",
+      destinationName: "Board Dossier.pdf",
+      destinationMeta: "Active document",
+      sourceRole: "Source File",
+      destinationRole: "Target Assembly",
       activePageLabel: "Page 02",
-      destinationSlotLabel: "Position 03",
+      destinationSlotLabel: "Slot 03",
       sceneDescription:
-        "A report page lifts from its source document and settles precisely into an open position in the destination document.",
-      transferStatus: "Page moved. Source preserved.",
+        "A crisp financial page lifts effortlessly from its source and docks into the target document with mathematical precision.",
+      transferStatus: "Page docked. Source preserved.",
+      tools: ["Merge", "Split", "Compress", "Convert", "Organize", "AI Tools"],
     },
     showcase: {
-      title: "See the structure before you export it.",
+      title: "See document geometry before you materialize it.",
       description:
-        "A clear workspace keeps every document, page order, and original source visible.",
-      tabs: ["Full Workspace", "Page Ordering", "Move Between PDFs"],
-      documentNames: ["Report 01", "Plans 02"],
+        "A calm, spatial canvas keeps every document boundary, page orientation, and source lineage visible at a glance.",
+      tabs: ["Spatial Canvas", "Tactile Reordering", "Bilingual Text Query"],
+      documentNames: ["Financial Report 2026.pdf", "Board Dossier.pdf"],
     },
     features: {
-      title: "Built around the way PDF work actually happens.",
+      eyebrow: "The Core Toolkit",
+      title: "Engineered for speed, precision, and complete stillness.",
       description:
-        "Four focused tools keep complex document work clear, local, and easy to resume.",
+        "Eight essential capabilities crafted to replace clunky legacy utilities with one unified, calm surface.",
       items: [
         {
-          title: "Visual PDF Organization",
+          id: "merge",
+          title: "Merge PDF",
+          tag: "Assembly",
           description:
-            "Organize multiple PDFs in one visual workspace. Move and reorder pages while preserving the original source of every page.",
+            "Unite disparate files into a cohesive, perfectly ordered publication with preserved bookmarks and vector fidelity.",
         },
         {
-          title: "Save and Continue Later",
+          id: "split",
+          title: "Split PDF",
+          tag: "Extraction",
           description:
-            "Keep your project structure saved locally and continue from where you stopped.",
+            "Surgically extract chapters, isolate single sheets, or partition voluminous reports into standalone documents.",
         },
         {
-          title: "Search Across Every PDF",
+          id: "compress",
+          title: "Compress PDF",
+          tag: "Optimization",
           description:
-            "Search document names and PDF text in Arabic and English, then jump directly to the result.",
+            "Lossless stream compaction that strips redundant overhead while keeping text and diagrams razor-sharp.",
         },
         {
-          title: "Flexible Standard Export",
+          id: "convert",
+          title: "Convert PDF",
+          tag: "Interoperability",
           description:
-            "Export organized documents as standard PDF files, individually or together in a ZIP archive.",
+            "Standard-compliant export that ensures universal rendering across every reader, operating system, and print engine.",
+        },
+        {
+          id: "organize",
+          title: "Organize Documents",
+          tag: "Structure",
+          description:
+            "Group, name, and categorize multiple PDFs across an open architectural canvas inspired by physical drafting tables.",
+        },
+        {
+          id: "rearrange",
+          title: "Rearrange Pages",
+          tag: "Sequencing",
+          description:
+            "Fluid drag-and-drop page sorting, instant 90° rotation, page cloning, and safe non-destructive removal.",
+        },
+        {
+          id: "ai-tools",
+          title: "AI PDF Tools",
+          tag: "Intelligence",
+          description:
+            "In-memory semantic search, deep Arabic and English text indexing, and rapid contextual snippet discovery.",
+        },
+        {
+          id: "workspace",
+          title: "Smart Workspace",
+          tag: "Local-First",
+          description:
+            "Automatic local state persistence in IndexedDB. Close your tab anytime and resume instantly with zero data loss.",
+        },
+      ],
+    },
+    trust: {
+      eyebrow: "Absolute Privacy",
+      title: "Your documents belong exclusively on your hardware.",
+      description:
+        "Traditional web PDF utilities silently upload your private contracts and statements to remote servers. PDF Space runs entirely within your browser's WebAssembly sandbox. Not a single byte ever crosses the network.",
+      metrics: [
+        {
+          value: "0 ms",
+          label: "Upload Latency",
+          sublabel: "Processed instantly in client memory",
+        },
+        {
+          value: "0 bytes",
+          label: "Data Transferred",
+          sublabel: "No servers, no tracking, no cloud storage",
+        },
+        {
+          value: "100%",
+          label: "Offline Capable",
+          sublabel: "Works seamlessly without internet access",
         },
       ],
     },
     howItWorks: {
-      title: "From loose files to a clear document set.",
+      eyebrow: "The Natural Workflow",
+      title: "From scattered files to a curated set in four movements.",
       description:
-        "The workspace changes with each step, so the process stays visible from import to export.",
+        "A deliberate, distraction-free progression designed to eliminate anxiety and cognitive friction.",
       steps: [
         {
-          title: "Create a Project",
+          number: "01",
+          title: "Ingest",
           description:
-            "Start with a clean local workspace and name the work you want to organize.",
+            "Drop any number of local PDFs onto the canvas. Files are decoded in Web Workers with zero upload waiting time.",
         },
         {
-          title: "Import PDFs",
+          number: "02",
+          title: "Curate",
           description:
-            "Bring in multiple source files without sending them to an external server.",
+            "Group related documents, create empty destination folders, and inspect high-resolution page thumbnails.",
         },
         {
-          title: "Organize Pages",
+          number: "03",
+          title: "Refine",
           description:
-            "Reorder pages or move them between documents while keeping their source identity.",
+            "Rearrange pages, rotate orientations, extract chapters, or perform deep Arabic & English text queries.",
         },
         {
-          title: "Export",
+          number: "04",
+          title: "Materialize",
           description:
-            "Download one standard PDF or several organized PDFs together in a ZIP archive.",
+            "Download pristine, standard-compliant PDF files individually or bundled into a single organized ZIP package.",
         },
       ],
     },
     faq: {
-      title: "Questions, answered plainly.",
+      eyebrow: "Answers",
+      title: "Designed with clarity and transparency.",
       description:
-        "The essentials about local projects, search, page movement, and export.",
+        "Everything you need to know about architecture, privacy, compatibility, and file integrity.",
       items: [
         {
-          question: "What is PDF Space?",
+          question: "How does PDF Space ensure my documents remain confidential?",
           answer:
-            "PDF Space is a visual workspace for organizing pages across multiple PDF documents while keeping each page connected to its original source.",
+            "All PDF decoding, page materialization, text search, and document assembly are executed exclusively in your browser using modern WebAssembly and Web Workers. Your files are never transmitted to any external server or third-party service.",
         },
         {
-          question: "Are my PDF files uploaded to a server?",
+          question: "Can I merge and split multiple large documents simultaneously?",
           answer:
-            "No. PDF processing and project storage happen locally in your browser. PDF Space does not upload your files.",
+            "Yes. PDF Space is optimized for high-volume document workflows. You can import multiple multi-page PDFs, cross-drag pages between them, duplicate groups, and partition files with smooth 60fps performance.",
         },
         {
-          question: "Can I save a project and continue later?",
+          question: "How does text search work with Arabic and English documents?",
           answer:
-            "Yes. Projects are saved in this browser so you can reopen them later. Clearing site data can remove those local projects.",
+            "The platform features a custom geometric text reconstruction engine that respects bidirectional script flow. English reads left-to-right, Arabic reads right-to-left, and search snippets are presented with authentic typographic context.",
         },
         {
-          question: "Can PDF Space search Arabic and English text?",
+          question: "Are my workspace projects saved if I refresh or close the tab?",
           answer:
-            "Yes. It can search embedded PDF text in Arabic and English. Scanned pages without embedded text require OCR, which is not included.",
+            "Yes. PDF Space utilizes browser IndexedDB to persist your workspaces locally on your device. When you reopen the studio, your documents, page arrangements, and project state are instantly restored.",
         },
         {
-          question: "What export formats are supported?",
+          question: "What formats can I export?",
           answer:
-            "You can export one document as a standard PDF, or export several documents as separate PDFs inside one ZIP archive.",
+            "You can export individual document groups as standard PDF files, or export multiple organized groups simultaneously packaged inside a clean, structured ZIP archive.",
         },
         {
-          question: "Can I move pages between different PDFs?",
+          question: "Is there any cost, subscription, or watermark?",
           answer:
-            "Yes. Pages can move between document groups while their original PDF and source page remain traceable.",
+            "PDF Space is completely free of watermarks, limitations, and accounts. It is designed as a pure, focused software instrument.",
         },
       ],
     },
     finalCta: {
-      title: "Give every PDF a clearer place.",
-      action: "Open PDF Space",
+      eyebrow: "Begin Now",
+      title: "Experience the stillness of modern document craft.",
+      description:
+        "No signup required. No files uploaded. Start organizing, merging, and splitting your PDFs in seconds.",
+      action: "Launch Workspace",
+      footnote: "Free • Private by Design • No Account Required",
     },
     footer: {
       description:
-        "A local-first visual workspace for organizing PDF pages and exporting standard files.",
-      legal: "Legal",
-      privacy: "Privacy Policy",
-      terms: "Terms of Use",
-      socialComingSoon: "Social links coming soon",
-      copyright: "PDF Space. All rights reserved.",
+        "A premium, local-first visual workspace for modern PDF engineering, page curation, and document architecture.",
+      legal: "Legal & Policy",
+      privacy: "Privacy Standard",
+      terms: "Terms of Architecture",
+      socialComingSoon: "Community links arriving soon",
+      copyright: "PDF Space. Handcrafted for clarity and privacy.",
     },
     comingSoon: {
-      eyebrow: "Coming soon",
-      title: "This part of PDF Space is still being prepared.",
+      eyebrow: "Coming Soon",
+      title: "This section is currently being refined.",
       descriptions: {
         login:
-          "Accounts are planned, but the current product works locally without signing in.",
+          "Accounts are optional and planned for future multi-device sync. The core studio is fully operational locally today.",
         privacy:
-          "The complete Privacy Policy is being prepared. PDF files currently stay in your browser and are not uploaded by PDF Space.",
+          "Our privacy commitment is mathematical: zero files leave your browser. Comprehensive legal documentation is being formatted.",
         terms:
-          "The complete Terms of Use are being prepared. No placeholder legal terms are shown here.",
+          "Terms of service documentation is in preparation. PDF Space operates locally on your machine.",
       },
-      returnHome: "Return Home",
-      openApp: "Open PDF Space",
+      returnHome: "Return to Studio",
+      openApp: "Open Workspace",
     },
   },
   ar: {
     navigation: {
-      home: "الرئيسية",
-      product: "المنتج",
-      features: "المزايا",
-      howItWorks: "كيف يعمل",
+      home: "نظرة عامة",
+      product: "الاستوديو",
+      features: "القدرات",
+      howItWorks: "الآلية",
+      trust: "المعمارية",
       faq: "الأسئلة",
       login: "تسجيل الدخول",
-      openApp: "فتح التطبيق",
+      openApp: "فتح الاستوديو",
       openMenu: "فتح قائمة التنقل",
       closeMenu: "إغلاق قائمة التنقل",
       dismissMenu: "إخفاء قائمة التنقل",
-      switchLanguage: "التبديل إلى الإنجليزية",
+      switchLanguage: "English",
     },
     hero: {
-      title: "مساحة أذكى لكل ملفات PDF.",
+      badge: "معمارية محلية بالكامل • خصوصية تامة • معالجة داخل المتصفح",
+      title: "قوة هادئة لجميع مستنداتك.",
       description:
-        "نظّم الصفحات بين المستندات، واحتفظ بمصدر كل صفحة، وصدّر ملفات PDF قياسية محليًا.",
-      primaryAction: "فتح PDF Space",
-      secondaryAction: "استكشف مساحة العمل",
-      sourceName: "Report 01",
-      sourceMeta: "٤ صفحات مصدر",
-      destinationName: "Plans 02",
-      destinationMeta: "وجهة مفتوحة",
-      sourceRole: "المستند المصدر",
+        "مساحة عمل مصممة بأعلى معايير الإتقان لدمج ملفات PDF، وتقسيمها، وإعادة ترتيب صفحاتها، وضغطها، واستخراج نصوصها بدقة متناهية ودون إرسال بايت واحد إلى خوادم خارجية.",
+      primaryAction: "فتح مساحة العمل",
+      secondaryAction: "استكشف القدرات",
+      sourceName: "التقرير المالي 2026.pdf",
+      sourceMeta: "٤ صفحات أصلية",
+      destinationName: "ملف الإدارة التنفيذية.pdf",
+      destinationMeta: "مستند نشط",
+      sourceRole: "الملف المصدر",
       destinationRole: "المستند الهدف",
-      activePageLabel: "الصفحة 02",
-      destinationSlotLabel: "الموضع 03",
+      activePageLabel: "صفحة 02",
+      destinationSlotLabel: "موضع 03",
       sceneDescription:
-        "ترتفع صفحة تقرير من مستندها المصدر وتستقر بدقة في موضع مفتوح داخل المستند الهدف.",
-      transferStatus: "تم نقل الصفحة مع حفظ المصدر.",
+        "ترتفع صفحة مستند بسلاسة من الملف المصدر لتستقر بدقة في المستند الهدف مع الحفاظ على سلامة المصدر الأصلي.",
+      transferStatus: "تم نقل الصفحة. المصدر محفوظ بدقة.",
+      tools: ["دمج", "تقسيم", "ضغط", "تحويل", "تنظيم", "أدوات الذكاء الاصطناعي"],
     },
     showcase: {
-      title: "شاهد بنية الملفات قبل تصديرها.",
+      title: "شاهد بنية المستند قبل استخراجه.",
       description:
-        "مساحة واضحة تُظهر كل مستند وترتيب الصفحات والمصدر الأصلي لكل صفحة.",
-      tabs: ["مساحة العمل", "ترتيب الصفحات", "النقل بين الملفات"],
-      documentNames: ["Report 01", "Plans 02"],
+        "مساحة هادئة تضع أمامك حدود المستندات، وترتيب الصفحات، والمصادر الأصلية في مشهد بصري متناسق.",
+      tabs: ["الرقعة البصرية", "الترتيب الدقيق", "البحث ثنائي اللغة"],
+      documentNames: ["التقرير المالي 2026.pdf", "ملف الإدارة التنفيذية.pdf"],
     },
     features: {
-      title: "أدوات مصممة لطريقة العمل الحقيقية مع ملفات PDF.",
+      eyebrow: "الأدوات الأساسية",
+      title: "مصممة للسرعة، والدقة، والهدوء التام.",
       description:
-        "أربع قدرات مركزة تجعل تنظيم المستندات واضحًا ومحليًا وسهل المتابعة لاحقًا.",
+        "ثماني قدرات جوهرية صُممت لتحل محل الأدوات التقليدية المعقدة بواجهة واحدة نقية وأنيقة.",
       items: [
         {
-          title: "تنظيم بصري لملفات PDF",
+          id: "merge",
+          title: "دمج PDF",
+          tag: "تجميع",
           description:
-            "نظّم عدة ملفات PDF داخل مساحة عمل بصرية واحدة، وانقل الصفحات ورتّبها مع الاحتفاظ بمصدر كل صفحة.",
+            "اجمع عدة ملفات منفصلة في وثيقة متكاملة واحدة فائقة الجودة مع الحفاظ على الدقة الخطية والهيكلية.",
         },
         {
-          title: "الحفظ والمتابعة لاحقًا",
+          id: "split",
+          title: "تقسيم PDF",
+          tag: "استخراج",
           description:
-            "احفظ بنية مشروعك محليًا، ثم عد إليه لاحقًا وأكمل من النقطة التي توقفت عندها.",
+            "استخرج الفصول، أو اعزل صفحات محددة، أو قسّم التقارير الكبيرة إلى مستندات مستقلة في ثوانٍ.",
         },
         {
-          title: "البحث في كل الملفات",
+          id: "compress",
+          title: "ضغط PDF",
+          tag: "تحسين الحجم",
           description:
-            "ابحث في أسماء المستندات ومحتوى صفحات PDF بالعربية والإنجليزية، وانتقل مباشرة إلى النتيجة.",
+            "تقليص ذكي لحجم المستند يزيل البيانات الزائدة مع المحافظة التامة على نقاء النصوص والرسومات.",
         },
         {
-          title: "تصدير قياسي ومرن",
+          id: "convert",
+          title: "تحويل PDF",
+          tag: "توافق قياسي",
           description:
-            "صدّر المستندات المرتبة كملفات PDF قياسية، منفردة أو مجمعة داخل ملف ZIP.",
+            "تصدير قياسي معتمد عالميًا يضمن ظهور المستند بالدقة ذاتها على كافة الأجهزة والشاشات والطابعات.",
+        },
+        {
+          id: "organize",
+          title: "تنظيم المستندات",
+          tag: "هيكلة",
+          description:
+            "رتّب المستندات وسمّها داخل رقعة عمل مفتوحة مستوحاة من طاولات التصميم المعماري الحديث.",
+        },
+        {
+          id: "rearrange",
+          title: "ترتيب الصفحات",
+          tag: "إعادة تنظيم",
+          description:
+            "إعادة ترتيب سلسة بالسحب والإفلات، تدوير فوري بزاوية ٩٠ درجة، وتكرار الصفحات وحذفها بأمان تام.",
+        },
+        {
+          id: "ai-tools",
+          title: "أدوات الذكاء الاصطناعي",
+          tag: "بحث ذكي",
+          description:
+            "بحث نصي فوري داخل صفحات PDF يدعم العربية والإنجليزية مع إبراز النصوص وسياقها بدقة متناهية.",
+        },
+        {
+          id: "workspace",
+          title: "مساحة عمل ذكية",
+          tag: "محلية بالكامل",
+          description:
+            "حفظ تلقائي للمشروع محليًا داخل متصفحك. أغلق الصفحة في أي وقت وعد إليها لتجد كل شيء كما تركته.",
+        },
+      ],
+    },
+    trust: {
+      eyebrow: "خصوصية مطلقة",
+      title: "مستنداتك ملك لك وحدك، ولا تغادر جهازك أبدًا.",
+      description:
+        "المواقع التقليدية ترفع ملفاتك الخاصة وعقودك الحساسة إلى خوادم بعيدة غير معلومة. أما PDF Space فيعمل بالكامل عبر تقنيات WebAssembly داخل متصفحك، دون إرسال بايت واحد عبر الشبكة.",
+      metrics: [
+        {
+          value: "0 مللي ثانية",
+          label: "وقت الرفع",
+          sublabel: "معالجة فورية داخل ذاكرة المتصفح",
+        },
+        {
+          value: "0 بايت",
+          label: "بيانات مرسلة للخارج",
+          sublabel: "لا توجد خوادم خارجية أو تتبع سحابي",
+        },
+        {
+          value: "100%",
+          label: "يعمل دون إنترنت",
+          sublabel: "إمكانية تشغيل واستخدام كاملة دون اتصال",
         },
       ],
     },
     howItWorks: {
-      title: "من ملفات متفرقة إلى مجموعة مستندات واضحة.",
+      eyebrow: "التدفق الطبيعي",
+      title: "من ملفات مشتتة إلى مستندات متقنة في أربع خطوات.",
       description:
-        "تتغير واجهة العرض مع كل خطوة لتظل العملية مفهومة من الاستيراد حتى التصدير.",
+        "تسلسل هادئ ومريح يزيل التعقيد ويمنحك السيطرة الكاملة على كل صفحة.",
       steps: [
         {
-          title: "أنشئ مشروعًا",
+          number: "01",
+          title: "الاستيراد",
           description:
-            "ابدأ بمساحة عمل محلية نظيفة وامنح المشروع اسمًا واضحًا.",
+            "أسقط ملفات PDF مباشرة في مساحة العمل؛ تتم قراءتها فورًا في الذاكرة دون أي انتظار.",
         },
         {
-          title: "استورد ملفات PDF",
+          number: "02",
+          title: "الهيكلة",
           description:
-            "أضف عدة ملفات مصدر من جهازك من دون إرسالها إلى خادم خارجي.",
+            "نظّم الملفات في مجموعات واضحة، وأنشئ مستندات جديدة، واستعرض مصغرات الصفحات عالية الدقة.",
         },
         {
-          title: "نظّم الصفحات",
+          number: "03",
+          title: "التحسين والترتيب",
           description:
-            "غيّر ترتيب الصفحات أو انقلها بين المستندات مع حفظ هوية مصدرها.",
+            "رتّب الصفحات، دوّر اتجاهها، قسّم الأقسام، أو ابحث في المحتوى النصي بالعربية أو الإنجليزية.",
         },
         {
-          title: "صدّر الملفات",
+          number: "04",
+          title: "التصدير القياسي",
           description:
-            "نزّل ملف PDF قياسيًا واحدًا أو عدة ملفات منظمة داخل ملف ZIP.",
+            "حمّل ملفات PDF قياسية نظيفة، إما كملف مفرد أو مجمعة في ملف ZIP مرتب وجاهز للمشاركة.",
         },
       ],
     },
     faq: {
-      title: "إجابات واضحة عن الأسئلة المهمة.",
+      eyebrow: "إجابات",
+      title: "إجابات واضحة بكل شفافية.",
       description:
-        "ما تحتاج إلى معرفته عن المشاريع المحلية والبحث ونقل الصفحات والتصدير.",
+        "كل ما تحتاج إلى معرفته حول الخصوصية، والمعمارية التقنية، وحفظ المستندات وتوافقها.",
       items: [
         {
-          question: "ما هو PDF Space؟",
+          question: "كيف يضمن PDF Space حماية وسرية ملفاتي بالكامل؟",
           answer:
-            "PDF Space مساحة عمل بصرية لتنظيم الصفحات بين عدة مستندات PDF مع إبقاء كل صفحة مرتبطة بمصدرها الأصلي.",
+            "تتم كافة عمليات فتح الملفات، وتوليد المصغرات، والبحث، والدمج، والتقسيم داخل متصفحك محليًا بالاعتماد على WebAssembly. لا يتم رفع أي مستند إلى أي خادم على الإطلاق.",
         },
         {
-          question: "هل يتم رفع ملفات PDF إلى خادم خارجي؟",
+          question: "هل يمكنني دمج عدة ملفات ضخمة وإعادة تقسيمها في الوقت نفسه؟",
           answer:
-            "لا. تتم معالجة الملفات وحفظ المشروع محليًا داخل متصفحك، ولا يرفع PDF Space ملفاتك.",
+            "نعم. تم تصميم المنصة لتوفر أعلى مستويات الأداء والسلاسة، مما يتيح لك التعامل مع ملفات متعددة ونقل الصفحات بينها بسرعة استجابة فائقة تصل إلى 60 إطارًا بالثانية.",
         },
         {
-          question: "هل يمكنني حفظ المشروع والعودة إليه لاحقًا؟",
+          question: "كيف يعمل البحث النصي مع المستندات العربية والإنجليزية؟",
           answer:
-            "نعم. تُحفظ المشاريع داخل هذا المتصفح لتفتحها لاحقًا. قد يؤدي مسح بيانات الموقع إلى حذف هذه المشاريع المحلية.",
+            "تحتوي المنصة على محرك هندسي متطور يفهم اتجاهات النصوص ثنائية اللغة؛ يتعامل مع العربية من اليمين إلى اليسار والإنجليزية من اليسار إلى اليمين ويظهر النتائج في سياقها الدقيق.",
         },
         {
-          question: "هل يدعم PDF Space البحث بالعربية والإنجليزية؟",
+          question: "هل تبقى مشاريعي محفوظة إذا أغلقت المتصفح أو قمت بتحديث الصفحة؟",
           answer:
-            "نعم. يمكنك البحث في النص المضمّن داخل ملفات PDF بالعربية والإنجليزية. الصفحات المصورة تحتاج إلى OCR، وهو غير متاح حاليًا.",
+            "نعم. يستخدم PDF Space قاعدة بيانات IndexedDB المحلية على جهازك لحفظ مساحة العمل وحالة المستندات تلقائيًا، لتتمكن من المتابعة فور إعادة فتح الاستوديو.",
         },
         {
-          question: "ما صيغ التصدير التي يدعمها؟",
+          question: "ما هي الصيغ والخيارات المتاحة للتصدير؟",
           answer:
-            "يمكنك تصدير مستند واحد كملف PDF قياسي، أو عدة مستندات كملفات PDF منفصلة داخل ملف ZIP.",
+            "يمكنك تصدير أي مجموعة مستندات كملف PDF قياسي مستقل، أو تصدير عدة مجموعات معًا داخل ملف ZIP منظم بنقرة واحدة.",
         },
         {
-          question: "هل يمكن نقل الصفحات بين ملفات PDF مختلفة؟",
+          question: "هل توجد رسوم خفية أو علامات مائية على الملفات المصدرة؟",
           answer:
-            "نعم. يمكن نقل الصفحات بين مجموعات المستندات مع بقاء ملف المصدر ورقم الصفحة الأصلية واضحين.",
+            "PDF Space أداة نظيفة تمامًا؛ لا توجد أي علامات مائية، ولا قيود على الاستخدام، ولا يتطلب إنشاء أي حساب.",
         },
       ],
     },
     finalCta: {
-      title: "امنح كل ملف PDF مكانًا أوضح.",
-      action: "فتح PDF Space",
+      eyebrow: "ابدأ الآن",
+      title: "جرّب هدوء وإتقان التعامل الحديث مع المستندات.",
+      description:
+        "لا حاجة للتسجيل، ولا يتم رفع أي ملفات. ابدأ فورًا بتنظيم ودمج وتقسيم ملفات PDF بكل ثقة.",
+      action: "تشغيل مساحة العمل",
+      footnote: "مجاني بالكامل • خصوصية مطلقة بالتصميم • لا يتطلب حسابًا",
     },
     footer: {
       description:
-        "مساحة عمل بصرية محلية لتنظيم صفحات PDF وتصدير ملفات قياسية.",
-      legal: "قانوني",
-      privacy: "سياسة الخصوصية",
+        "مساحة عمل بصرية متميزة ومحلية بالكامل لهندسة ملفات PDF، وتنظيم الصفحات، وبناء المستندات الحديثة.",
+      legal: "الشروط والسياسات",
+      privacy: "معيار الخصوصية",
       terms: "شروط الاستخدام",
-      socialComingSoon: "روابط التواصل قريبًا",
-      copyright: "PDF Space. جميع الحقوق محفوظة.",
+      socialComingSoon: "روابط المجتمع قريبًا",
+      copyright: "PDF Space. صُمم بأعلى درجات العناية والخصوصية.",
     },
     comingSoon: {
       eyebrow: "قريبًا",
-      title: "هذا الجزء من PDF Space لا يزال قيد الإعداد.",
+      title: "هذا القسم قيد التجهيز بعناية.",
       descriptions: {
         login:
-          "الحسابات مخطط لها، لكن المنتج الحالي يعمل محليًا من دون تسجيل الدخول.",
+          "الحسابات ميزة اختيارية مخطط لها مستقبلاً لمزامنة الأجهزة. الاستوديو يعمل محليًا بكامل طاقته الآن دون الحاجة لحساب.",
         privacy:
-          "سياسة الخصوصية الكاملة قيد الإعداد. تبقى ملفات PDF حاليًا داخل متصفحك ولا يرفعها PDF Space.",
+          "التزامنا بالخصوصية مبني على مبدأ تقني صارم: لا تغادر الملفات جهازك أبدًا. التوثيق القانوني قيد المراجعة.",
         terms:
-          "شروط الاستخدام الكاملة قيد الإعداد، ولن نعرض نصوصًا قانونية مؤقتة أو غير مكتملة.",
+          "وثيقة الشروط والأحكام قيد الإعداد النهائي. يعمل التطبيق محليًا على جهازك.",
       },
-      returnHome: "العودة للرئيسية",
-      openApp: "فتح PDF Space",
+      returnHome: "العودة إلى الاستوديو",
+      openApp: "فتح مساحة العمل",
     },
   },
-} as const satisfies Record<LandingLocale, LandingCopy>;
+};

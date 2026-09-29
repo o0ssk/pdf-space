@@ -15,9 +15,10 @@ export const FaqSection: React.FC<FaqSectionProps> = ({ copy }) => {
   return (
     <section className="landing-light-section faq-section" id="faq">
       <div className="landing-shell faq-shell">
-        <div className="landing-section-heading">
-          <h2>{copy.faq.title}</h2>
-          <p>{copy.faq.description}</p>
+        <div className="landing-section-header">
+          <span className="editorial-eyebrow">{copy.faq.eyebrow}</span>
+          <h2 className="editorial-title">{copy.faq.title}</h2>
+          <p className="editorial-lead">{copy.faq.description}</p>
         </div>
 
         <div className="faq-list">

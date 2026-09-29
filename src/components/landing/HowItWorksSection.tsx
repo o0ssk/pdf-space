@@ -149,9 +149,10 @@ export const HowItWorksSection: React.FC<HowItWorksSectionProps> = ({
       ref={sectionRef}
     >
       <div className="landing-shell">
-        <div className="landing-section-heading">
-          <h2>{copy.howItWorks.title}</h2>
-          <p>{copy.howItWorks.description}</p>
+        <div className="landing-section-header">
+          <span className="editorial-eyebrow">{copy.howItWorks.eyebrow}</span>
+          <h2 className="editorial-title">{copy.howItWorks.title}</h2>
+          <p className="editorial-lead">{copy.howItWorks.description}</p>
         </div>
 
         <div className="how-it-works-layout">
