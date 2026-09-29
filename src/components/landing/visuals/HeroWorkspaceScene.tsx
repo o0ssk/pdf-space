@@ -1,5 +1,14 @@
 import React from "react";
-import { Check, FileStack } from "lucide-react";
+import {
+  Check,
+  FileStack,
+  Layers,
+  Scissors,
+  RotateCw,
+  Search,
+  ArrowUpDown,
+  Download,
+} from "lucide-react";
 import {
   motion,
   useReducedMotion,
@@ -33,25 +42,69 @@ export const HeroWorkspaceScene: React.FC<HeroWorkspaceSceneProps> = ({
       }`}
       data-hero-workspace-scene
     >
-      <div className="hero-scene-lighting">
-        <i />
-        <i />
+      {/* Sleek macOS Window Chrome */}
+      <div className="hero-workspace-chrome">
+        <div className="hero-window-controls">
+          <span className="window-dot is-close" />
+          <span className="window-dot is-minimize" />
+          <span className="window-dot is-maximize" />
+        </div>
+
+        <div className="hero-workspace-titlebar">
+          <span className="hero-workspace-brand">
+            <FileStack className="w-3.5 h-3.5" />
+            PDF Space Studio
+          </span>
+          <span className="hero-titlebar-divider">/</span>
+          <span className="hero-workspace-docname">Quarterly_Review_2026.pdf</span>
+        </div>
+
+        <div className="hero-workspace-status-badge">
+          <span className="status-indicator-dot" />
+          <span>Saved Locally</span>
+        </div>
       </div>
 
-      <div className="hero-workspace-topbar">
-        <span className="hero-workspace-brand">
-          <FileStack />
-          PDF Space
-        </span>
-        <span>Focused document flow</span>
-        <span className="hero-workspace-project">Local workspace</span>
+      {/* Pro Toolbar */}
+      <div className="hero-workspace-command-bar">
+        <div className="command-bar-tools">
+          <button className="command-tool-btn is-active" type="button">
+            <ArrowUpDown className="w-3.5 h-3.5" />
+            <span>Reorder</span>
+          </button>
+          <button className="command-tool-btn" type="button">
+            <Scissors className="w-3.5 h-3.5" />
+            <span>Split</span>
+          </button>
+          <button className="command-tool-btn" type="button">
+            <Layers className="w-3.5 h-3.5" />
+            <span>Merge</span>
+          </button>
+          <button className="command-tool-btn" type="button">
+            <RotateCw className="w-3.5 h-3.5" />
+            <span>Rotate</span>
+          </button>
+          <button className="command-tool-btn is-search" type="button">
+            <Search className="w-3.5 h-3.5" />
+            <span>Search (⌘K)</span>
+          </button>
+        </div>
+
+        <div className="command-bar-actions">
+          <span className="command-zoom-badge">100%</span>
+          <button className="command-export-btn" type="button">
+            <Download className="w-3.5 h-3.5" />
+            <span>Export</span>
+          </button>
+        </div>
       </div>
 
+      {/* The Workspace Canvas */}
       <div className="hero-workspace-canvas">
         <motion.div
           animate={
             reduceMotion
-              ? { opacity: 0.2 }
+              ? { opacity: 0.25 }
               : { opacity: [...landingMotion.hero.sourceFocus] }
           }
           className="hero-lane-focus is-source"
@@ -60,33 +113,12 @@ export const HeroWorkspaceScene: React.FC<HeroWorkspaceSceneProps> = ({
         <motion.div
           animate={
             reduceMotion
-              ? { opacity: 0.72 }
+              ? { opacity: 0.6 }
               : { opacity: [...landingMotion.hero.destinationFocus] }
           }
           className="hero-lane-focus is-destination"
           transition={transition}
         />
-
-        <svg
-          aria-hidden="true"
-          className="hero-transfer-trajectory"
-          viewBox="0 0 1000 450"
-        >
-          <defs>
-            <linearGradient id="hero-trajectory-gradient" x1="0" x2="1" y1="0" y2="0">
-              <stop offset="0%" stopColor="#3f79bb" stopOpacity="0.15" />
-              <stop offset="50%" stopColor="#78a5d7" stopOpacity="0.65" />
-              <stop offset="100%" stopColor="#8c3a70" stopOpacity="0.2" />
-            </linearGradient>
-          </defs>
-          <path
-            d="M 290 140 C 450 60, 600 60, 780 180"
-            fill="none"
-            stroke="url(#hero-trajectory-gradient)"
-            strokeDasharray="6 8"
-            strokeWidth="2.5"
-          />
-        </svg>
 
         <HeroDocumentLane
           meta={copy.hero.sourceMeta}
@@ -114,6 +146,7 @@ export const HeroWorkspaceScene: React.FC<HeroWorkspaceSceneProps> = ({
           transition={transition}
         />
 
+        {/* Animated Transfer Page with Smooth Docking & No Vanishing */}
         <motion.div
           className="hero-active-page-scroll"
           style={foregroundStyle ?? {}}
@@ -123,8 +156,7 @@ export const HeroWorkspaceScene: React.FC<HeroWorkspaceSceneProps> = ({
               reduceMotion
                 ? {
                     opacity: 1,
-                    rotate: 0,
-                    scale: 0.78,
+                    scale: 0.95,
                     x: "var(--hero-page-travel)",
                     y: "var(--hero-page-placement-y)",
                   }
@@ -143,6 +175,7 @@ export const HeroWorkspaceScene: React.FC<HeroWorkspaceSceneProps> = ({
           </motion.div>
         </motion.div>
 
+        {/* Dynamic Context Status Pill */}
         <motion.div
           animate={
             reduceMotion
@@ -175,13 +208,11 @@ export const HeroWorkspaceScene: React.FC<HeroWorkspaceSceneProps> = ({
             className="hero-transfer-confirmation"
             transition={transition}
           >
-            <Check />
+            <Check className="w-3.5 h-3.5" />
             {copy.hero.transferStatus}
           </motion.span>
         </motion.div>
       </div>
-
-      <div className="hero-workspace-reflection" />
     </div>
   );
 };
